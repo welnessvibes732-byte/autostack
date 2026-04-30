@@ -66,7 +66,7 @@ export default function Login() {
     const { error: authErr } = await supabase.auth.signInWithPassword({ email, password })
     if (authErr) {
       setError(authErr.message)
-      gsap.to(cardRef.current, { x: [-8, 8, -6, 6, -3, 3, 0], duration: 0.5, ease: "power2.out" })
+      gsap.to(cardRef.current, { x: [-8, 8, -6, 6, -3, 3, 0] as any, duration: 0.5, ease: "power2.out" })
     } else {
       setSuccess(true)
       gsap.to(cardRef.current, {
