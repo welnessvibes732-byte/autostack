@@ -133,7 +133,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           position: "relative",
           zIndex: 10,
           transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
-          borderRadius: 0,
           margin: "12px 0 12px 12px",
           borderRadius: "24px",
           overflow: "hidden",
