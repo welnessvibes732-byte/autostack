@@ -9,13 +9,10 @@ import { useGSAP } from "@gsap/react"
 import {
   LayoutDashboard, Building2, KeySquare, Users, UserPlus, Wrench,
   FileText, Search, BarChart3, Receipt, BellRing, Link2, Settings, LogOut,
-  ChevronLeft, Menu
+  ChevronLeft, Menu, X
 } from "lucide-react"
 
 gsap.registerPlugin(useGSAP)
-
-const VIDEO_SRC =
-  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260315_073750_51473149-4350-4920-ae24-c8214286f323.mp4"
 
 const navItems = [
   { name: "Dashboard",    href: "/app/dashboard",    icon: LayoutDashboard },
@@ -38,6 +35,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
   const [loading,     setLoading]     = useState(true)
   const [isCollapsed, setIsCollapsed] = useState(false)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
   const sidebarRef = useRef<HTMLElement>(null)
   const mainRef    = useRef<HTMLElement>(null)
 
@@ -98,49 +96,54 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex flex-col md:flex-row h-[100dvh] overflow-hidden relative bg-black text-white font-[Poppins,system-ui,sans-serif]" style={{ overflow: "hidden",
       background: "#000", color: "#fff",
-      fontFamily: "'Poppins', system-ui, sans-serif",
       position: "relative",
     }}>
 
-      {/* ── Full-screen video background ── */}
-      
       {/* Dark overlay */}
       <div style={{
         position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none",
         background: "#000000",
       }} />
 
+      {/* ── Mobile Top Bar ── */}
+      <div className="md:hidden flex items-center justify-between p-4 border-b border-[#1E1E1E] bg-[#050505] relative z-20">
+        <div className="flex items-center gap-2">
+          <div style={{ width: "28px", height: "28px", borderRadius: "8px", background: "#0D0D0D", border: "1px solid #1E1E1E", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "14px" }}>🌿</div>
+          <span className="font-semibold text-white tracking-tight">PropIQ</span>
+        </div>
+        <button onClick={() => setIsMobileOpen(true)} className="text-gray-400 p-1">
+          <Menu size={24} />
+        </button>
+      </div>
+
+      {/* ── Mobile Overlay ── */}
+      {isMobileOpen && (
+        <div 
+          className="fixed inset-0 bg-black/60 backdrop-blur-sm z-40 md:hidden" 
+          onClick={() => setIsMobileOpen(false)}
+        />
+      )}
+
       {/* ── Sidebar ── */}
       <aside
         ref={sidebarRef}
-        className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-2xl"
+        className={`bg-[#0D0D0D] border border-[#1E1E1E] rounded-2xl flex flex-col flex-shrink-0 z-50 fixed md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isMobileOpen ? "translate-x-0 left-3" : "-translate-x-[120%] md:translate-x-0"}`}
         style={{
           width: isCollapsed ? "64px" : "220px",
-          flexShrink: 0,
-          display: "flex",
-          flexDirection: "column",
-          position: "relative",
-          zIndex: 10,
-          transition: "width 0.3s cubic-bezier(0.4,0,0.2,1)",
+          height: "calc(100vh - 24px)",
           margin: "12px 0 12px 12px",
-          borderRadius: "24px",
-          overflow: "hidden",
+          top: "0"
         }}
       >
-        {/* Collapse toggle */}
+        {/* Mobile close button */}
+        <button onClick={() => setIsMobileOpen(false)} className="absolute right-4 top-5 md:hidden text-gray-400">
+          <X size={20} />
+        </button>
+
+        {/* Collapse toggle (desktop only) */}
         <button
+          className="hidden md:flex absolute -right-[13px] top-[28px] w-[26px] h-[26px] rounded-full bg-[#0D0D0D] border border-[#1E1E1E] items-center justify-center cursor-pointer z-20 text-[#A1A1AA] transition-all duration-200 hover:bg-white/10 hover:text-white"
           onClick={() => setIsCollapsed(v => !v)}
-          style={{
-            position: "absolute", right: "-13px", top: "28px",
-            width: "26px", height: "26px", borderRadius: "50%",
-            background: "#0D0D0D",
-            border: "1px solid #1E1E1E",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", zIndex: 20, color: "#A1A1AA",
-            transition: "all 0.2s",
-          }}
-          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.15)"; (e.currentTarget as HTMLElement).style.color = "#fff" }}
-          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.08)"; (e.currentTarget as HTMLElement).style.color = "rgba(255,255,255,0.5)" }}
         >
           {isCollapsed ? <Menu size={11} /> : <ChevronLeft size={11} />}
         </button>
@@ -149,7 +152,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div style={{
           height: "64px", display: "flex", alignItems: "center",
           padding: "0 18px", gap: "10px", overflow: "hidden", flexShrink: 0,
-          border: "1px solid #1E1E1E",
+          borderBottom: "1px solid #1E1E1E",
         }}>
           <div style={{
             width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
@@ -158,9 +161,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: "14px",
           }}>🌿</div>
-          {!isCollapsed && (
+          {(!isCollapsed || isMobileOpen) && (
             <span style={{
-              fontFamily: "'Poppins', system-ui, sans-serif",
               fontWeight: 600, fontSize: "16px",
               letterSpacing: "-0.04em", color: "#fff",
               whiteSpace: "nowrap",
@@ -177,17 +179,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={() => setIsMobileOpen(false)}
                 className={`nav-link-item${isActive ? " liquid-glass" : ""}`}
-                title={isCollapsed ? item.name : undefined}
+                title={isCollapsed && !isMobileOpen ? item.name : undefined}
                 style={{
                   display: "flex", alignItems: "center",
-                  gap: isCollapsed ? 0 : "10px",
-                  padding: isCollapsed ? "10px" : "8px 14px",
-                  justifyContent: isCollapsed ? "center" : "flex-start",
+                  gap: isCollapsed && !isMobileOpen ? 0 : "10px",
+                  padding: isCollapsed && !isMobileOpen ? "10px" : "8px 14px",
+                  justifyContent: isCollapsed && !isMobileOpen ? "center" : "flex-start",
                   borderRadius: "9999px",
                   textDecoration: "none",
                   fontSize: "13px",
-                  fontFamily: "'Poppins', system-ui, sans-serif",
                   fontWeight: isActive ? 500 : 400,
                   color: isActive ? "#fff" : "rgba(255,255,255,0.45)",
                   transition: "all 0.18s ease",
@@ -210,34 +212,33 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 }}
               >
                 <Icon size={15} style={{ flexShrink: 0 }} />
-                {!isCollapsed && <span>{item.name}</span>}
+                {(!isCollapsed || isMobileOpen) && <span>{item.name}</span>}
               </Link>
             )
           })}
         </div>
 
         {/* Sign Out */}
-        <div style={{ padding: "8px", border: "1px solid #1E1E1E" }}>
+        <div style={{ padding: "8px", borderTop: "1px solid #1E1E1E" }}>
           <button
             onClick={handleLogout}
             style={{
               display: "flex", alignItems: "center",
-              gap: isCollapsed ? 0 : "10px",
-              justifyContent: isCollapsed ? "center" : "flex-start",
-              width: "100%", padding: isCollapsed ? "10px" : "8px 14px",
+              gap: isCollapsed && !isMobileOpen ? 0 : "10px",
+              justifyContent: isCollapsed && !isMobileOpen ? "center" : "flex-start",
+              width: "100%", padding: isCollapsed && !isMobileOpen ? "10px" : "8px 14px",
               borderRadius: "9999px", cursor: "pointer",
               border: "none", background: "transparent",
               color: "#A1A1AA",
               fontSize: "13px",
-              fontFamily: "'Poppins', system-ui, sans-serif",
               transition: "all 0.18s ease",
             }}
             onMouseEnter={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "#fff"; el.style.background = "rgba(255,255,255,0.06)" }}
             onMouseLeave={e => { const el = e.currentTarget as HTMLButtonElement; el.style.color = "rgba(255,255,255,0.3)"; el.style.background = "transparent" }}
-            title={isCollapsed ? "Sign Out" : undefined}
+            title={isCollapsed && !isMobileOpen ? "Sign Out" : undefined}
           >
             <LogOut size={14} style={{ flexShrink: 0 }} />
-            {!isCollapsed && <span>sign out</span>}
+            {(!isCollapsed || isMobileOpen) && <span>sign out</span>}
           </button>
         </div>
       </aside>
@@ -246,14 +247,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <main
         ref={mainRef}
         style={{
-          flex: 1, minWidth: 0, overflowY: "auto",
+          flex: 1, minWidth: 0, overflowY: "auto", overflowX: "hidden",
           position: "relative", zIndex: 5,
         }}
       >
         <div style={{
           padding: "24px 28px", maxWidth: "1440px",
           margin: "0 auto", minHeight: "100%", paddingBottom: "80px",
-        }}>
+        }} className="px-4 sm:px-[28px]">
           {children}
         </div>
       </main>
