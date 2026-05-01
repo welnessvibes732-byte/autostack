@@ -4,6 +4,7 @@ import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
 import { Plus, Search, MapPin, Home, ChevronRight, Building2, X, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
@@ -87,17 +88,7 @@ export default function Properties() {
 
     setIsSubmitting(true);
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      let { data: orgData } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
-      let organization_id = orgData?.id;
-
-      if (!organization_id) {
-        const { data: newOrg, error: createErr } = await supabase.from('organizations').insert({ name: 'Default Organization', owner_id: user.id }).select('id').single();
-        if (createErr) throw new Error("Could not create default organization: " + createErr.message);
-        organization_id = newOrg.id;
-      }
+      const organization_id = await getOrCreateOrg();
 
       // 1. Insert property and get its ID
       const { data: newProp, error: propErr } = await supabase.from('properties').insert({

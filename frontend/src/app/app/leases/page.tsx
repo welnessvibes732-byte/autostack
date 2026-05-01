@@ -4,6 +4,7 @@ import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
 import { Plus, Upload, Search, KeySquare, FileText, AlertTriangle, X, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
@@ -151,16 +152,7 @@ export default function Leases() {
     if (!file) return;
 
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
-
-      let { data: orgData } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
-      let organization_id = orgData?.id;
-
-      if (!organization_id) {
-        const { data: newOrg } = await supabase.from('organizations').insert({ name: 'Default Organization', owner_id: user.id }).select('id').single();
-        organization_id = newOrg?.id;
-      }
+      const organization_id = await getOrCreateOrg();
 
       // Upload to bucket
       const filePath = `${organization_id}/${Date.now()}_${file.name}`;
