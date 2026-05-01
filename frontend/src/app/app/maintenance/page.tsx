@@ -34,11 +34,11 @@ export default function Maintenance() {
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Ticket tracking, vendor assignment, and issue resolution.</p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+          <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
             onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
           ><Users size={14} /> Vendors</button>
-          <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 4px 16px rgba(59,130,246,0.35)", transition: "all 0.2s" }}
+          <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", transition: "all 0.2s" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
           ><Plus size={14} /> New Ticket</button>
@@ -52,11 +52,11 @@ export default function Maintenance() {
           { label: "In Progress",     value: "3",  icon: Clock,         color: "#f59e0b" },
           { label: "Resolved (30d)",  value: "14", icon: CheckCircle2,  color: "#10b981" },
         ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: `linear-gradient(135deg,${color}12,${color}04)`, border: `1px solid ${color}22`, display: "flex", alignItems: "center", gap: "14px", cursor: "default" }}
+          <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: "#0D0D0D", border: "1px solid #1E1E1E", display: "flex", alignItems: "center", gap: "14px", cursor: "default" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { y: -3, boxShadow: `0 12px 32px ${color}25`, duration: 0.25 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", duration: 0.35, ease: "back.out(1.5)" })}
           >
-            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${color}30`, flexShrink: 0 }}>
+            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "#1E1E1E", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #333", flexShrink: 0 }}>
               <Icon size={16} color={color} />
             </div>
             <div>

@@ -78,16 +78,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       position: "fixed", inset: 0, background: "#000",
       display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100,
     }}>
-      <video autoPlay loop muted playsInline src={VIDEO_SRC}
-        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", opacity: 0.45, zIndex: 0 }}
-      />
+      
       <div style={{ position: "relative", zIndex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "20px" }}>
         <div className="float-anim" style={{ fontSize: "40px" }}>🌿</div>
         <div style={{ display: "flex", gap: "6px" }}>
           {[0,1,2].map(i => (
             <div key={i} style={{
               width: "5px", height: "5px", borderRadius: "50%",
-              background: "rgba(255,255,255,0.6)",
+              background: "#0D0D0D",
               animation: "pulse-dot 1.2s ease-in-out infinite",
               animationDelay: `${i * 0.2}s`,
             }} />
@@ -106,25 +104,17 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     }}>
 
       {/* ── Full-screen video background ── */}
-      <video
-        autoPlay loop muted playsInline
-        src={VIDEO_SRC}
-        style={{
-          position: "fixed", inset: 0, width: "100%", height: "100%",
-          objectFit: "cover", opacity: 0.4, zIndex: 0,
-          pointerEvents: "none",
-        }}
-      />
+      
       {/* Dark overlay */}
       <div style={{
         position: "fixed", inset: 0, zIndex: 1, pointerEvents: "none",
-        background: "linear-gradient(135deg, rgba(0,0,0,0.55) 0%, rgba(0,0,0,0.35) 50%, rgba(0,0,0,0.6) 100%)",
+        background: "#000000",
       }} />
 
       {/* ── Sidebar ── */}
       <aside
         ref={sidebarRef}
-        className="liquid-glass-strong"
+        className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-2xl"
         style={{
           width: isCollapsed ? "64px" : "220px",
           flexShrink: 0,
@@ -144,11 +134,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           style={{
             position: "absolute", right: "-13px", top: "28px",
             width: "26px", height: "26px", borderRadius: "50%",
-            background: "rgba(255,255,255,0.08)",
-            backdropFilter: "blur(8px)",
-            border: "1px solid rgba(255,255,255,0.12)",
+            background: "#0D0D0D",
+            border: "1px solid #1E1E1E",
             display: "flex", alignItems: "center", justifyContent: "center",
-            cursor: "pointer", zIndex: 20, color: "rgba(255,255,255,0.5)",
+            cursor: "pointer", zIndex: 20, color: "#A1A1AA",
             transition: "all 0.2s",
           }}
           onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.15)"; (e.currentTarget as HTMLElement).style.color = "#fff" }}
@@ -161,13 +150,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <div style={{
           height: "64px", display: "flex", alignItems: "center",
           padding: "0 18px", gap: "10px", overflow: "hidden", flexShrink: 0,
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
+          border: "1px solid #1E1E1E",
         }}>
           <div style={{
             width: "28px", height: "28px", borderRadius: "8px", flexShrink: 0,
-            background: "rgba(255,255,255,0.1)",
-            backdropFilter: "blur(4px)",
-            border: "1px solid rgba(255,255,255,0.2)",
+            background: "#0D0D0D",
+            border: "1px solid #1E1E1E",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: "14px",
           }}>🌿</div>
@@ -230,7 +218,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </div>
 
         {/* Sign Out */}
-        <div style={{ padding: "8px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div style={{ padding: "8px", border: "1px solid #1E1E1E" }}>
           <button
             onClick={handleLogout}
             style={{
@@ -240,7 +228,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
               width: "100%", padding: isCollapsed ? "10px" : "8px 14px",
               borderRadius: "9999px", cursor: "pointer",
               border: "none", background: "transparent",
-              color: "rgba(255,255,255,0.3)",
+              color: "#A1A1AA",
               fontSize: "13px",
               fontFamily: "'Poppins', system-ui, sans-serif",
               transition: "all 0.18s ease",

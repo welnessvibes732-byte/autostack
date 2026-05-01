@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Plus, Upload, Search, KeySquare, FileText, AlertTriangle } from "lucide-react"
+import { Plus, Upload, Search, KeySquare, FileText, AlertTriangle, X, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 gsap.registerPlugin(useGSAP)
@@ -11,6 +11,19 @@ export default function Leases() {
   const ref = useRef<HTMLDivElement>(null)
   const [leases, setLeases] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [tenantsList, setTenantsList] = useState<any[]>([])
+  const [unitsList, setUnitsList] = useState<any[]>([])
+  const [form, setForm] = useState({
+    tenant_id: "",
+    unit_id: "",
+    start_date: new Date().toISOString().split('T')[0],
+    expiry_date: new Date(Date.now() + 31536000000).toISOString().split('T')[0],
+    rent_amount: ""
+  })
 
   useEffect(() => {
     async function fetchLeases() {
@@ -61,7 +74,6 @@ export default function Leases() {
             }
           }
 
-          // Generate deterministic color from name
           const colors = ['#3b82f6', '#7c3aed', '#f59e0b', '#10b981', '#f43f5e'];
           const colorIndex = tenantName.length % colors.length;
           
@@ -89,6 +101,104 @@ export default function Leases() {
     fetchLeases()
   }, [])
 
+  // Fetch tenants and units when opening modal
+  useEffect(() => {
+    if (showCreateModal) {
+      const fetchFormOptions = async () => {
+        const [{ data: tData }, { data: uData }] = await Promise.all([
+          supabase.from('tenants').select('id, full_name'),
+          supabase.from('units').select('id, unit_number').eq('status', 'vacant')
+        ]);
+        if (tData) setTenantsList(tData);
+        if (uData) setUnitsList(uData);
+      };
+      fetchFormOptions();
+    }
+  }, [showCreateModal])
+
+  const submitLease = async () => {
+    if (!form.tenant_id || !form.unit_id || !form.start_date || !form.expiry_date || !form.rent_amount) {
+      alert("Please fill in all fields.");
+      return;
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const { error: leaseErr } = await supabase.from('leases').insert({
+        tenant_id: form.tenant_id,
+        unit_id: form.unit_id,
+        start_date: form.start_date,
+        expiry_date: form.expiry_date,
+        rent_amount: parseFloat(form.rent_amount),
+        lease_status: 'Active'
+      });
+
+      if (leaseErr) throw leaseErr;
+
+      const { error: unitErr } = await supabase.from('units').update({ status: 'occupied' }).eq('id', form.unit_id);
+      if (unitErr) throw unitErr;
+
+      setShowCreateModal(false);
+      window.location.reload();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+      setIsSubmitting(false);
+    }
+  }
+
+  const handleUploadLease = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      let { data: orgData } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
+      let organization_id = orgData?.id;
+
+      if (!organization_id) {
+        const { data: newOrg } = await supabase.from('organizations').insert({ name: 'Default Organization', owner_id: user.id }).select('id').single();
+        organization_id = newOrg?.id;
+      }
+
+      // Upload to bucket
+      const filePath = `${organization_id}/${Date.now()}_${file.name}`;
+      const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
+      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
+
+      const leaseId = window.prompt("Enter Lease ID this document belongs to (or leave blank if unassigned):");
+
+      // Insert row into documents
+      const { error: dbErr } = await supabase.from('documents').insert({
+        lease_id: leaseId || null,
+        file_path: filePath,
+        file_name: file.name,
+        doc_type: 'lease',
+        authority_level: 4,
+        index_status: 'pending'
+      });
+      if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
+
+      alert("File uploaded. Triggering n8n webhook...");
+
+      // Call n8n webhook
+      try {
+        await fetch('http://webhook.n8n/local', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'lease_uploaded', file_path: filePath, lease_id: leaseId })
+        });
+      } catch(webhookErr) {
+        console.warn("Webhook failed (expected if n8n not running locally):", webhookErr);
+      }
+
+      alert("Upload complete and webhook triggered successfully!");
+    } catch (err: any) {
+      alert("Error: " + err.message);
+    }
+  }
+
   useGSAP(() => {
     if (loading) return
     gsap.timeline({ defaults: { ease: "power3.out" } })
@@ -108,11 +218,14 @@ export default function Leases() {
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Active, expiring, and historical agreements.</p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
             onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
-          ><Upload size={14} /> Upload PDF</button>
-          <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.3)", fontFamily: "'DM Sans',sans-serif" }}
+          >
+            <input type="file" accept="application/pdf" hidden onChange={handleUploadLease} />
+            <Upload size={14} /> Upload PDF
+          </label>
+          <button onClick={() => setShowCreateModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
           ><Plus size={14} /> Create Lease</button>
@@ -186,7 +299,7 @@ export default function Leases() {
                   <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${l.statusColor}15`, color: l.statusColor, border: `1px solid ${l.statusColor}30` }}>{l.status}</span>
                 </td>
                 <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                  <button style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "rgba(255,255,255,0.04)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s", marginLeft: "auto" }}
+                  <button style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s", marginLeft: "auto" }}
                     onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#93c5fd" }}
                     onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
                   ><FileText size={13} /></button>
@@ -196,6 +309,64 @@ export default function Leases() {
           </tbody>
         </table>
       </div>
+
+      {/* Create Lease Modal */}
+      {showCreateModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "480px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Plus size={18} color="#ec4899" /> Create New Lease</h2>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Tenant</label>
+                <select value={form.tenant_id} onChange={e => setForm({...form, tenant_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                  <option value="" disabled>Select a tenant...</option>
+                  {tenantsList.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vacant Unit</label>
+                <select value={form.unit_id} onChange={e => setForm({...form, unit_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                  <option value="" disabled>Select a vacant unit...</option>
+                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.unit_number}</option>)}
+                </select>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Start Date</label>
+                  <input type="date" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>End Date</label>
+                  <input type="date" value={form.expiry_date} onChange={e => setForm({...form, expiry_date: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Rent Amount (₹)</label>
+                <input type="number" placeholder="e.g. 25000" value={form.rent_amount} onChange={e => setForm({...form, rent_amount: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setShowCreateModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitLease} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
+                {isSubmitting ? <><Loader2 size={14} className="spin" /> Creating...</> : "Save Lease"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+      `}} />
     </div>
   )
 }

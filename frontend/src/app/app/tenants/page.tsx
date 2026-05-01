@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Plus, Search, Mail, Phone, ExternalLink, Users } from "lucide-react"
+import { Plus, Search, Mail, Phone, ExternalLink, Users, X, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 gsap.registerPlugin(useGSAP)
@@ -11,6 +11,15 @@ export default function Tenants() {
   const ref = useRef<HTMLDivElement>(null)
   const [tenants, setTenants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [form, setForm] = useState({
+    full_name: "",
+    email: "",
+    phone: ""
+  })
 
   useEffect(() => {
     async function fetchTenants() {
@@ -78,6 +87,43 @@ export default function Tenants() {
     fetchTenants()
   }, [])
 
+  const submitTenant = async () => {
+    if (!form.full_name || !form.email) {
+      alert("Please enter at least the Full Name and Email.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      let { data: orgData, error: orgErr } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
+      let organization_id = orgData?.id;
+
+      if (!organization_id) {
+        const { data: newOrg, error: createErr } = await supabase.from('organizations').insert({ name: 'Default Organization', owner_id: user.id }).select('id').single();
+        if (createErr) throw new Error("Could not create default organization: " + createErr.message);
+        organization_id = newOrg.id;
+      }
+
+      const { error: insertErr } = await supabase.from('tenants').insert({
+        organization_id,
+        full_name: form.full_name,
+        email: form.email,
+        phone: form.phone
+      });
+
+      if (insertErr) throw insertErr;
+
+      setShowCreateModal(false);
+      window.location.reload();
+    } catch (err: any) {
+      alert("Error: " + err.message);
+      setIsSubmitting(false);
+    }
+  }
+
   useGSAP(() => {
     if (loading) return
     gsap.timeline({ defaults: { ease: "power3.out" } })
@@ -96,7 +142,7 @@ export default function Tenants() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Client registry and communication hub.</p>
         </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.3)", fontFamily: "'DM Sans',sans-serif" }}
+        <button onClick={() => setShowCreateModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
         ><Plus size={14} /> Add Tenant</button>
@@ -154,7 +200,7 @@ export default function Tenants() {
                   <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${t.statusColor}15`, color: t.statusColor, border: `1px solid ${t.statusColor}30` }}>{t.status}</span>
                 </td>
                 <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                  <button style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "rgba(255,255,255,0.04)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s", marginLeft: "auto" }}
+                  <button style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s", marginLeft: "auto" }}
                     onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#93c5fd" }}
                     onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
                   ><ExternalLink size={13} /></button>
@@ -164,6 +210,47 @@ export default function Tenants() {
           </tbody>
         </table>
       </div>
+
+      {/* Add Tenant Modal */}
+      {showCreateModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "400px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Plus size={18} color="#ec4899" /> Add Tenant</h2>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Full Name</label>
+                <input type="text" placeholder="e.g. John Doe" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email Address</label>
+                <input type="email" placeholder="e.g. john@example.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone Number</label>
+                <input type="tel" placeholder="e.g. +1 234 567 890" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setShowCreateModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitTenant} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
+                {isSubmitting ? <><Loader2 size={14} className="spin" /> Saving...</> : "Save Tenant"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+      `}} />
     </div>
   )
 }

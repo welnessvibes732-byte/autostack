@@ -33,10 +33,10 @@ export default function Invoices() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Vendor invoices, OCR extraction, and anomaly detection.</p>
         </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.3)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+        <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-        ><Plus size={14} /> Upload Invoice</button>
+        ><input type="file" hidden onChange={(e) => { if(e.target.files) alert("Invoice upload triggered for " + e.target.files[0].name) }} /><Plus size={14} /> Upload Invoice</label>
       </header>
 
       {/* Stats */}
@@ -46,11 +46,11 @@ export default function Invoices() {
           { label: "Anomalies Found",  value: "1",    color: "#f43f5e", icon: AlertTriangle },
           { label: "Processed (30d)",  value: "₹2.8L",color: "#10b981", icon: CheckCircle2 },
         ].map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: `linear-gradient(135deg,${color}12,${color}04)`, border: `1px solid ${color}22`, display: "flex", alignItems: "center", gap: "14px", cursor: "default" }}
+          <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: "#0D0D0D", border: "1px solid #1E1E1E", display: "flex", alignItems: "center", gap: "14px", cursor: "default" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { y: -3, boxShadow: `0 12px 30px ${color}25`, duration: 0.25 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", duration: 0.35, ease: "back.out(1.5)" })}
           >
-            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${color}30`, flexShrink: 0 }}>
+            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "#1E1E1E", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #333", flexShrink: 0 }}>
               <Icon size={16} color={color} />
             </div>
             <div>

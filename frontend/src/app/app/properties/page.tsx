@@ -62,6 +62,44 @@ export default function Properties() {
     fetchProperties()
   }, [])
 
+  const handleAddProperty = async () => {
+    try {
+      const name = window.prompt("Property Name (e.g., Sunrise Apartments)");
+      if (!name) return;
+      const address_line1 = window.prompt("Address (e.g., 123 Main St)");
+      const city = window.prompt("City (e.g., New York)");
+      const property_type = window.prompt("Property Type (residential/commercial)", "residential");
+
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Not authenticated");
+
+      let { data: orgData, error: orgErr } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
+      let organization_id = orgData?.id;
+
+      if (!organization_id) {
+        const { data: newOrg, error: createErr } = await supabase.from('organizations').insert({ name: 'Default Organization', owner_id: user.id }).select('id').single();
+        if (createErr) throw new Error("Could not create default organization: " + createErr.message);
+        organization_id = newOrg.id;
+      }
+
+      const { error } = await supabase.from('properties').insert({
+        organization_id,
+        name,
+        address_line1,
+        city,
+        property_type
+      });
+
+      if (error) throw error;
+      alert("Property added successfully!");
+      window.location.reload();
+    } catch (err: any) {
+      alert("Error adding property: " + err.message);
+    }
+  }
+
+
+
   useGSAP(() => {
     if (loading) return
     gsap.timeline({ defaults: { ease: "power3.out" } })
@@ -80,7 +118,7 @@ export default function Properties() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Your real estate portfolio master list.</p>
         </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.3)", fontFamily: "'DM Sans',sans-serif" }}
+        <button onClick={handleAddProperty} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
         ><Plus size={14} /> Add Property</button>

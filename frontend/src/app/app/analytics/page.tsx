@@ -43,14 +43,14 @@ export default function Analytics() {
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px" }}>
         {METRICS.map(({ label, value, sub, color, icon: Icon }) => (
-          <div key={label} className="anim-stat" style={{ padding: "20px", borderRadius: "14px", background: `linear-gradient(135deg,${color}14,${color}05)`, border: `1px solid ${color}22`, position: "relative", overflow: "hidden", cursor: "default" }}
+          <div key={label} className="anim-stat" style={{ padding: "20px", borderRadius: "14px", background: `linear-gradient(135deg,${color}14,${color}05)`, border: "1px solid #1E1E1E", position: "relative", overflow: "hidden", cursor: "default" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { y: -4, boxShadow: `0 16px 40px ${color}30`, duration: 0.25 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", duration: 0.35, ease: "back.out(1.5)" })}
           >
             <div style={{ position: "absolute", top: "-16px", right: "-16px", width: "60px", height: "60px", borderRadius: "50%", background: color, opacity: 0.12, filter: "blur(12px)", pointerEvents: "none" }} />
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px" }}>
               <span style={{ fontSize: "12px", color: "var(--text-2)", fontWeight: 500 }}>{label}</span>
-              <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: `${color}18`, display: "flex", alignItems: "center", justifyContent: "center", border: `1px solid ${color}30` }}>
+              <div style={{ width: "28px", height: "28px", borderRadius: "7px", background: "#1E1E1E", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #333" }}>
                 <Icon size={13} color={color} />
               </div>
             </div>
@@ -74,7 +74,7 @@ export default function Analytics() {
             {BAR_DATA.map(({ month, value }) => (
               <div key={month} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "6px", height: "100%" }}>
                 <div style={{ flex: 1, width: "100%", display: "flex", alignItems: "flex-end" }}>
-                  <div className="bar-fill" style={{ width: "100%", borderRadius: "5px 5px 0 0", background: "linear-gradient(180deg,#3b82f6,#6366f1)", height: `${value}%`, boxShadow: "0 0 12px rgba(59,130,246,0.3)" }} />
+                  <div className="bar-fill" style={{ width: "100%", borderRadius: "5px 5px 0 0", background: "linear-gradient(to bottom, #ec4899, #f97316)", height: `${value}%`, boxShadow: "0 0 12px rgba(255,86,86,0.25)" }} />
                 </div>
                 <span style={{ fontSize: "10px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{month}</span>
               </div>

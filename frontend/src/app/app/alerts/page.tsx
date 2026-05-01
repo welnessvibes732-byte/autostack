@@ -37,7 +37,7 @@ export default function Alerts() {
         </div>
         <button className="anim-filter" style={{
           display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px",
-          borderRadius: "10px", background: "rgba(255,255,255,0.05)", border: "1px solid var(--border-2)",
+          borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)",
           color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif",
           transition: "all 0.2s",
         }}
@@ -90,11 +90,11 @@ export default function Alerts() {
               <p style={{ fontSize: "11px", color: "var(--text-3)", margin: "6px 0 0", fontFamily: "'DM Mono', monospace" }}>{alert.time}</p>
             </div>
             <div style={{ display: "flex", gap: "6px", flexShrink: 0 }}>
-              <button style={{ width: "28px", height: "28px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "rgba(255,255,255,0.04)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.2s" }}
+              <button style={{ width: "28px", height: "28px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(16,185,129,0.15)"; e.currentTarget.style.color = "#34d399" }}
                 onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
               ><Check size={13} /></button>
-              <button style={{ width: "28px", height: "28px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "rgba(255,255,255,0.04)", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.2s" }}
+              <button style={{ width: "28px", height: "28px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.2s" }}
                 onMouseEnter={e => { e.currentTarget.style.background = "rgba(244,63,94,0.12)"; e.currentTarget.style.color = "#fb7185" }}
                 onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
               ><X size={13} /></button>

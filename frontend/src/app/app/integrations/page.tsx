@@ -44,7 +44,7 @@ export default function Integrations() {
             >
               {connected && <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "2px", background: `linear-gradient(90deg,transparent,${color},transparent)` }} />}
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: `${color}15`, border: `1px solid ${color}30`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ width: "40px", height: "40px", borderRadius: "10px", background: `${color}15`, border: "1px solid #333", display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <Icon size={18} color={color} />
                 </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "5px", padding: "3px 10px", borderRadius: "99px", background: connected ? "rgba(16,185,129,0.1)" : "rgba(255,255,255,0.04)", border: connected ? "1px solid rgba(16,185,129,0.25)" : "1px solid var(--border)", fontSize: "11px", fontWeight: 600, color: connected ? "#34d399" : "var(--text-3)" }}>

@@ -41,7 +41,7 @@ export default function AISearch() {
     <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "28px", maxWidth: "780px", margin: "0 auto", paddingTop: "24px" }}>
       {/* Header */}
       <header className="search-header" style={{ textAlign: "center" }}>
-        <div style={{ width: "52px", height: "52px", borderRadius: "14px", background: "linear-gradient(135deg,#3b82f6,#7c3aed)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: "0 0 40px rgba(59,130,246,0.35)" }}>
+        <div style={{ width: "52px", height: "52px", borderRadius: "14px", background: "linear-gradient(to right, #ec4899, #f97316)", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", boxShadow: "0 0 40px rgba(255,86,86,0.25)" }}>
           <Sparkles size={22} color="#fff" />
         </div>
         <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "28px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: "0 0 6px" }}>AI Portfolio Search</h1>
@@ -57,12 +57,12 @@ export default function AISearch() {
             <input ref={inputRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleSearch()}
               placeholder="Ask anything about your portfolio…"
-              style={{ display: "block", width: "100%", height: "48px", borderRadius: "12px", border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.3)", padding: "0 14px 0 40px", fontSize: "14px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s, box-shadow 0.2s" }}
+              style={{ display: "block", width: "100%", height: "48px", borderRadius: "12px", border: "1px solid #1E1E1E", background: "rgba(0,0,0,0.3)", padding: "0 14px 0 40px", fontSize: "14px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s, box-shadow 0.2s" }}
               onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
               onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
             />
           </div>
-          <button onClick={() => handleSearch()} style={{ padding: "0 24px", borderRadius: "12px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.35)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+          <button onClick={() => handleSearch()} style={{ padding: "0 24px", borderRadius: "12px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -1, duration: 0.2 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1,    y: 0,  duration: 0.3, ease: "back.out(1.5)" })}
           >Search</button>
@@ -72,7 +72,7 @@ export default function AISearch() {
           <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 500, letterSpacing: "0.04em" }}>TRY:</span>
           {SUGGESTIONS.map(s => (
             <button key={s} className="search-chip" onClick={() => { setQuery(s); handleSearch(s) }}
-              style={{ padding: "5px 12px", borderRadius: "99px", fontSize: "12px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border-2)", color: "var(--text-2)", transition: "all 0.2s" }}
+              style={{ padding: "5px 12px", borderRadius: "99px", fontSize: "12px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", transition: "all 0.2s" }}
               onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#93c5fd"; e.currentTarget.style.borderColor = "rgba(59,130,246,0.25)" }}
               onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-2)"; e.currentTarget.style.borderColor = "var(--border-2)" }}
             >{s}</button>

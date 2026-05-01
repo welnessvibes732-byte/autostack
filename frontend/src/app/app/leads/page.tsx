@@ -82,7 +82,7 @@ export default function Leads() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Track and convert prospective tenants.</p>
         </div>
-        <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.3)", fontFamily: "'DM Sans',sans-serif" }}
+        <button style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
         ><Plus size={14} /> Add Lead</button>
@@ -101,7 +101,7 @@ export default function Leads() {
                 <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}` }} />
                 <span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 600, fontSize: "13px", color: "#fff" }}>{label}</span>
               </div>
-              <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: `${color}18`, color, border: `1px solid ${color}25` }}>{cards.length}</span>
+              <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: "#1E1E1E", color, border: `1px solid ${color}25` }}>{cards.length}</span>
             </div>
 
             {/* Cards */}
@@ -119,11 +119,11 @@ export default function Leads() {
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "1px solid var(--border)" }}>
                     <span style={{ fontSize: "11px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{card.time}</span>
                     <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                      <button style={{ width: "22px", height: "22px", borderRadius: "6px", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", color: "var(--text-3)" }}
+                      <button style={{ width: "22px", height: "22px", borderRadius: "6px", background: "#0D0D0D", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", color: "var(--text-3)" }}
                         onMouseEnter={e => { e.currentTarget.style.background = `rgba(59,130,246,0.12)`; e.currentTarget.style.color = "#3b82f6" }}
                         onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
                       ><Phone size={10} /></button>
-                      <button style={{ width: "22px", height: "22px", borderRadius: "6px", background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", color: "var(--text-3)" }}
+                      <button style={{ width: "22px", height: "22px", borderRadius: "6px", background: "#0D0D0D", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", color: "var(--text-3)" }}
                         onMouseEnter={e => { e.currentTarget.style.background = `rgba(59,130,246,0.12)`; e.currentTarget.style.color = "#3b82f6" }}
                         onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
                       ><Mail size={10} /></button>

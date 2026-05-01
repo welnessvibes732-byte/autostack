@@ -26,7 +26,7 @@ export default function SettingsPage() {
 
   const inputStyle: React.CSSProperties = {
     display: "block", width: "100%", height: "42px", borderRadius: "9px",
-    border: "1px solid rgba(255,255,255,0.1)", background: "rgba(0,0,0,0.25)",
+    border: "1px solid #1E1E1E", background: "rgba(0,0,0,0.25)",
     padding: "0 14px", fontSize: "14px", color: "#fff", outline: "none",
     fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s, box-shadow 0.2s",
   }
@@ -67,7 +67,7 @@ export default function SettingsPage() {
         <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "20px" }}>
           {/* Org details */}
           <div className="anim-card" style={{ padding: "24px", borderRadius: "16px", background: "var(--surface)", border: "1px solid var(--border)", position: "relative", overflow: "hidden" }}>
-            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "1px", background: "linear-gradient(90deg,transparent,rgba(59,130,246,0.3),transparent)" }} />
+            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: "1px", background: "linear-gradient(90deg,transparent,rgba(255,86,86,0.25),transparent)" }} />
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: "15px", fontWeight: 600, color: "#fff", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
               <Building2 size={15} color="var(--text-2)" /> Organisation Details
             </h2>
@@ -82,7 +82,7 @@ export default function SettingsPage() {
                 </div>
               ))}
             </div>
-            <button className="anim-field" style={{ marginTop: "20px", display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(135deg,#3b82f6,#6366f1)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(59,130,246,0.3)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+            <button className="anim-field" style={{ marginTop: "20px", display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
               onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 })}
               onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
             >

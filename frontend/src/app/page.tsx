@@ -62,22 +62,7 @@ export default function Home() {
       }}
     >
       {/* ── Fullscreen background video ── */}
-      <video
-        autoPlay
-        loop
-        muted
-        playsInline
-        src={VIDEO_SRC}
-        style={{
-          position: "absolute",
-          inset: 0,
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-          opacity: 0.5,
-          zIndex: 0,
-        }}
-      />
+      
 
       {/* Dark gradient overlay */}
       <div
@@ -98,7 +83,7 @@ export default function Home() {
           top: 0,
           left: 0,
           right: 0,
-          padding: "24px 40px",
+          padding: "24px 5vw",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -113,11 +98,9 @@ export default function Home() {
             alignItems: "center",
             gap: "10px",
             background: "rgba(18,18,18,0.92)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
             borderRadius: "9999px",
             padding: "12px 22px 12px 16px",
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid #1E1E1E",
           }}
         >
           <svg viewBox="0 0 256 256" style={{ height: "20px", width: "20px" }} fill="none">
@@ -149,11 +132,9 @@ export default function Home() {
             alignItems: "center",
             gap: "2px",
             background: "rgba(18,18,18,0.92)",
-            backdropFilter: "blur(20px)",
-            WebkitBackdropFilter: "blur(20px)",
             borderRadius: "9999px",
             padding: "6px 10px",
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid #1E1E1E",
           }}
         >
           {[
@@ -166,7 +147,7 @@ export default function Home() {
               key={label}
               href={href}
               style={{
-                color: "rgba(255,255,255,0.6)",
+                color: "#A1A1AA",
                 fontSize: "13px",
                 fontWeight: 400,
                 padding: "8px 18px",
@@ -179,10 +160,7 @@ export default function Home() {
                 e.currentTarget.style.color = "#fff"
                 e.currentTarget.style.background = "rgba(255,255,255,0.07)"
               }}
-              onMouseLeave={e => {
-                e.currentTarget.style.color = "rgba(255,255,255,0.6)"
-                e.currentTarget.style.background = "transparent"
-              }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#0D0D0D"; e.currentTarget.style.color = "#A1A1AA"; e.currentTarget.style.borderColor = "#1E1E1E"; }}
             >
               {label}
             </a>
@@ -197,7 +175,7 @@ export default function Home() {
           <Link
             href="/login"
             style={{
-              color: "rgba(255,255,255,0.7)",
+              color: "#A1A1AA",
               fontSize: "13px",
               fontWeight: 400,
               padding: "12px 20px",
@@ -206,8 +184,7 @@ export default function Home() {
               letterSpacing: "-0.01em",
               transition: "color 0.2s",
               background: "rgba(18,18,18,0.92)",
-              backdropFilter: "blur(20px)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid #1E1E1E",
             }}
             onMouseEnter={e => (e.currentTarget.style.color = "#fff")}
             onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.7)")}
@@ -245,7 +222,7 @@ export default function Home() {
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-end",
-          padding: "0 40px 60px",
+          padding: "0 5vw 60px",
           pointerEvents: "none",
         }}
       >
@@ -253,11 +230,11 @@ export default function Home() {
         <div style={{ userSelect: "none" }}>
 
           {/* Row 1: "the intelligence" + top-right stat */}
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap" }}>
             <div
               className="hero-word"
               style={{
-                fontSize: "clamp(60px, 10.5vw, 155px)",
+                fontSize: "clamp(32px, 8vw, 155px)",
                 fontWeight: 500,
                 letterSpacing: "-0.04em",
                 lineHeight: 0.92,
@@ -275,7 +252,7 @@ export default function Home() {
                   style={{
                     height: "1px",
                     width: "72px",
-                    background: "rgba(255,255,255,0.35)",
+                    background: "#0D0D0D",
                     transform: "rotate(20deg)",
                   }}
                 />
@@ -293,7 +270,7 @@ export default function Home() {
               <div
                 style={{
                   fontSize: "12px",
-                  color: "rgba(255,255,255,0.5)",
+                  color: "#A1A1AA",
                   marginTop: "5px",
                   letterSpacing: "0.02em",
                   textTransform: "lowercase",
@@ -308,7 +285,7 @@ export default function Home() {
           <div
             className="hero-word"
             style={{
-              fontSize: "clamp(60px, 10.5vw, 155px)",
+              fontSize: "clamp(32px, 8vw, 155px)",
               fontWeight: 500,
               letterSpacing: "-0.04em",
               lineHeight: 0.92,
@@ -321,11 +298,11 @@ export default function Home() {
           </div>
 
           {/* Row 3: "real estate" + bottom stat */}
-          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap" }}>
             <div
               className="hero-word"
               style={{
-                fontSize: "clamp(60px, 10.5vw, 155px)",
+                fontSize: "clamp(32px, 8vw, 155px)",
                 fontWeight: 500,
                 letterSpacing: "-0.04em",
                 lineHeight: 0.92,
@@ -343,7 +320,7 @@ export default function Home() {
                   style={{
                     height: "1px",
                     width: "72px",
-                    background: "rgba(255,255,255,0.35)",
+                    background: "#0D0D0D",
                     transform: "rotate(-20deg)",
                   }}
                 />
@@ -361,7 +338,7 @@ export default function Home() {
               <div
                 style={{
                   fontSize: "12px",
-                  color: "rgba(255,255,255,0.5)",
+                  color: "#A1A1AA",
                   marginTop: "5px",
                   textTransform: "lowercase",
                 }}
@@ -378,6 +355,8 @@ export default function Home() {
             display: "flex",
             alignItems: "flex-end",
             justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "24px",
             marginTop: "28px",
             pointerEvents: "all",
           }}
@@ -389,7 +368,7 @@ export default function Home() {
               maxWidth: "260px",
               fontSize: "15px",
               lineHeight: 1.5,
-              color: "rgba(255,255,255,0.75)",
+              color: "#A1A1AA",
               fontWeight: 300,
               letterSpacing: "-0.01em",
               margin: 0,
@@ -415,12 +394,12 @@ export default function Home() {
                 style={{
                   height: "1px",
                   width: "60px",
-                  background: "rgba(255,255,255,0.35)",
+                  background: "#0D0D0D",
                   transform: "rotate(-20deg)",
                 }}
               />
             </div>
-            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.5)", marginTop: "5px", textTransform: "lowercase" }}>
+            <div style={{ fontSize: "12px", color: "#A1A1AA", marginTop: "5px", textTransform: "lowercase" }}>
               property managers
             </div>
           </div>
@@ -455,15 +434,15 @@ export default function Home() {
             <Link
               href="/login"
               style={{
-                background: "rgba(255,255,255,0.08)",
-                color: "rgba(255,255,255,0.8)",
+                background: "#0D0D0D",
+                color: "#A1A1AA",
                 fontSize: "14px",
                 fontWeight: 400,
                 borderRadius: "9999px",
                 padding: "14px 24px",
                 textDecoration: "none",
                 letterSpacing: "-0.02em",
-                border: "1px solid rgba(255,255,255,0.15)",
+                border: "1px solid #1E1E1E",
                 transition: "all 0.2s",
                 display: "inline-block",
               }}
@@ -471,10 +450,7 @@ export default function Home() {
                 e.currentTarget.style.background = "rgba(255,255,255,0.14)"
                 e.currentTarget.style.color = "#fff"
               }}
-              onMouseLeave={e => {
-                e.currentTarget.style.background = "rgba(255,255,255,0.08)"
-                e.currentTarget.style.color = "rgba(255,255,255,0.8)"
-              }}
+              onMouseLeave={e => { e.currentTarget.style.background = "#0D0D0D"; e.currentTarget.style.color = "#A1A1AA"; e.currentTarget.style.borderColor = "#1E1E1E"; }}
             >
               sign in
             </Link>
