@@ -127,7 +127,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       {/* ── Sidebar ── */}
       <aside
         ref={sidebarRef}
-        className={`bg-[#0D0D0D] border border-[#1E1E1E] rounded-2xl flex flex-col flex-shrink-0 z-50 fixed md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isMobileOpen ? "translate-x-0 left-3" : "-translate-x-[120%] md:translate-x-0"}`}
+        className={`bg-[#0D0D0D] border border-[#1E1E1E] rounded-2xl flex flex-col flex-shrink-0 z-50 fixed md:relative transition-all duration-300 ease-[cubic-bezier(0.4,0,0.2,1)] ${isMobileOpen ? "left-3" : "-left-[300px] md:left-0"}`}
         style={{
           width: isCollapsed ? "64px" : "220px",
           height: "calc(100vh - 24px)",
@@ -136,7 +136,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         }}
       >
         {/* Mobile close button */}
-        <button onClick={() => setIsMobileOpen(false)} className="absolute right-4 top-5 md:hidden text-gray-400">
+        <button onClick={() => setIsMobileOpen(false)} className="absolute right-4 top-5 md:hidden text-gray-400 z-50">
           <X size={20} />
         </button>
 
