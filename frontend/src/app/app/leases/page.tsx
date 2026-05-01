@@ -107,7 +107,7 @@ export default function Leases() {
       const fetchFormOptions = async () => {
         const [{ data: tData }, { data: uData }] = await Promise.all([
           supabase.from('tenants').select('id, full_name'),
-          supabase.from('units').select('id, unit_number').eq('status', 'vacant')
+          supabase.from('units').select('id, unit_number, property:properties(name)').eq('status', 'vacant')
         ]);
         if (tData) setTenantsList(tData);
         if (uData) setUnitsList(uData);
@@ -332,7 +332,7 @@ export default function Leases() {
                 <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vacant Unit</label>
                 <select value={form.unit_id} onChange={e => setForm({...form, unit_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
                   <option value="" disabled>Select a vacant unit...</option>
-                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.unit_number}</option>)}
+                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.property?.name ? `${u.property.name} – ` : ''}{u.unit_number}</option>)}
                 </select>
               </div>
 
