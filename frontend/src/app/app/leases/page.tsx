@@ -166,6 +166,7 @@ export default function Leases() {
 
       // Insert row into documents
       const { error: dbErr } = await supabase.from('documents').insert({
+        organization_id,
         lease_id: leaseId || null,
         file_path: filePath,
         file_name: file.name,
