@@ -71,7 +71,7 @@ export default function SettingsPage() {
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: "15px", fontWeight: 600, color: "#fff", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
               <Building2 size={15} color="var(--text-2)" /> Organisation Details
             </h2>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "16px" }}>
               {[{ label: "Company Name", val: "Acme Real Estate Pvt Ltd", type: "text" }, { label: "Tax ID / GSTIN", val: "GSTIN-123456789", type: "text" }, { label: "Country", val: "India", type: "text" }, { label: "Currency", val: "INR (₹)", type: "text" }].map(({ label, val, type }) => (
                 <div key={label} className="anim-field">
                   <label style={{ display: "block", marginBottom: "6px", fontSize: "12px", fontWeight: 500, color: "var(--text-2)", letterSpacing: "0.02em" }}>{label}</label>

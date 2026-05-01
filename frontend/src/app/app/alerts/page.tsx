@@ -27,7 +27,7 @@ export default function Alerts() {
   return (
     <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "24px", maxWidth: "900px" }}>
       {/* Header */}
-      <header className="page-header" style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", paddingBottom: "20px", borderBottom: "1px solid var(--border)" }}>
+      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)"  }}>
         <div>
           <p style={{ color: "var(--text-3)", fontSize: "12px", fontFamily: "'DM Mono', monospace", letterSpacing: "0.06em", marginBottom: "4px" }}>SYSTEM</p>
           <h1 style={{ fontFamily: "'Sora', sans-serif", fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>

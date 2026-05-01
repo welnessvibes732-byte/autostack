@@ -149,7 +149,7 @@ export default function Dashboard() {
           pointerEvents: "none",
         }} />
 
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", flexWrap: "wrap", gap: "16px" }}>
+        <div className="flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ flexWrap: "wrap", gap: "16px"  }}>
           <div>
             <p className="dash-hero-text" style={{ fontSize: "11px", color: "#A1A1AA", letterSpacing: "0.14em", textTransform: "uppercase", marginBottom: "12px", fontFamily: "'DM Mono',monospace" }}>
               April 2026 · Portfolio Overview
@@ -190,7 +190,7 @@ export default function Dashboard() {
       </div>
 
       {/* ── KPI Cards ── */}
-      <section style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "12px", perspective: "1000px" }}>
+      <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "12px" }}>
         {KPI_CONFIG.map(kpi => {
           const Icon = kpi.icon
           const value = kpi.format(stats[kpi.key as keyof typeof stats] as number)
@@ -227,7 +227,7 @@ export default function Dashboard() {
       </section>
 
       {/* ── Main 2-col ── */}
-      <section style={{ display: "grid", gridTemplateColumns: "1fr 310px", gap: "14px" }}>
+      <section className="grid grid-cols-1 lg:grid-cols-[1fr_310px]" style={{ gap: "14px" }}>
 
         {/* Activity panel */}
         <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-2xl" style={{ minHeight: "400px", display: "flex", flexDirection: "column" }}>

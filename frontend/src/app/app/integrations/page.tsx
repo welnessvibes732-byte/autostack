@@ -34,7 +34,7 @@ export default function Integrations() {
         <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Connect external services to the PropIQ ecosystem.</p>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "16px" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "16px" }}>
         {INTEGRATIONS.map(({ name, desc, status, icon: Icon, color }) => {
           const connected = status === "connected"
           return (

@@ -96,8 +96,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   )
 
   return (
-    <div style={{
-      display: "flex", height: "100dvh", overflow: "hidden",
+    <div className="flex flex-col md:flex-row h-[100dvh] overflow-hidden relative bg-black text-white font-[Poppins,system-ui,sans-serif]" style={{ overflow: "hidden",
       background: "#000", color: "#fff",
       fontFamily: "'Poppins', system-ui, sans-serif",
       position: "relative",

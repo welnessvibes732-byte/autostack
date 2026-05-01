@@ -41,7 +41,7 @@ export default function Analytics() {
         <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Portfolio performance and revenue insights.</p>
       </header>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "14px" }}>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4" style={{ gap: "14px" }}>
         {METRICS.map(({ label, value, sub, color, icon: Icon }) => (
           <div key={label} className="anim-stat" style={{ padding: "20px", borderRadius: "14px", background: `linear-gradient(135deg,${color}14,${color}05)`, border: "1px solid #1E1E1E", position: "relative", overflow: "hidden", cursor: "default" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { y: -4, boxShadow: `0 16px 40px ${color}30`, duration: 0.25 })}
@@ -60,7 +60,7 @@ export default function Analytics() {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "18px" }}>
+      <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "18px" }}>
         {/* Bar chart */}
         <div className="anim-card" style={{ padding: "24px", borderRadius: "16px", background: "var(--surface)", border: "1px solid var(--border)" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
