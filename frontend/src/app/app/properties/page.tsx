@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Plus, Search, MapPin, Home, ChevronRight, Building2 } from "lucide-react"
+import { Plus, Search, MapPin, Home, ChevronRight, Building2, X, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 
 gsap.registerPlugin(useGSAP)
@@ -11,6 +11,17 @@ export default function Properties() {
   const ref = useRef<HTMLDivElement>(null)
   const [properties, setProperties] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Modal states
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [form, setForm] = useState({
+    name: "",
+    address_line1: "",
+    city: "",
+    property_type: "residential",
+    unitsCount: "1"
+  })
 
   useEffect(() => {
     async function fetchProperties() {
@@ -62,18 +73,24 @@ export default function Properties() {
     fetchProperties()
   }, [])
 
-  const handleAddProperty = async () => {
-    try {
-      const name = window.prompt("Property Name (e.g., Sunrise Apartments)");
-      if (!name) return;
-      const address_line1 = window.prompt("Address (e.g., 123 Main St)");
-      const city = window.prompt("City (e.g., New York)");
-      const property_type = window.prompt("Property Type (residential/commercial)", "residential");
+  const submitProperty = async () => {
+    if (!form.name || !form.address_line1 || !form.city) {
+      alert("Please fill in the Property Name, Address, and City.");
+      return;
+    }
 
+    const unitsNum = parseInt(form.unitsCount, 10);
+    if (isNaN(unitsNum) || unitsNum < 1) {
+      alert("Please enter a valid number of units.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Not authenticated");
 
-      let { data: orgData, error: orgErr } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
+      let { data: orgData } = await supabase.from('organizations').select('id').limit(1).maybeSingle();
       let organization_id = orgData?.id;
 
       if (!organization_id) {
@@ -82,23 +99,38 @@ export default function Properties() {
         organization_id = newOrg.id;
       }
 
-      const { error } = await supabase.from('properties').insert({
+      // 1. Insert property and get its ID
+      const { data: newProp, error: propErr } = await supabase.from('properties').insert({
         organization_id,
-        name,
-        address_line1,
-        city,
-        property_type
-      });
+        name: form.name,
+        address_line1: form.address_line1,
+        city: form.city,
+        property_type: form.property_type
+      }).select('id').single();
 
-      if (error) throw error;
-      alert("Property added successfully!");
+      if (propErr) throw propErr;
+
+      // 2. Generate Units
+      const unitsToInsert = [];
+      for (let i = 1; i <= unitsNum; i++) {
+        unitsToInsert.push({
+          property_id: newProp.id,
+          unit_number: `Unit ${i}`,
+          status: 'vacant',
+          rent_amount: 0
+        });
+      }
+
+      const { error: unitsErr } = await supabase.from('units').insert(unitsToInsert);
+      if (unitsErr) throw new Error("Property created, but failed to generate units: " + unitsErr.message);
+
+      setShowCreateModal(false);
       window.location.reload();
     } catch (err: any) {
       alert("Error adding property: " + err.message);
+      setIsSubmitting(false);
     }
   }
-
-
 
   useGSAP(() => {
     if (loading) return
@@ -118,7 +150,7 @@ export default function Properties() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Your real estate portfolio master list.</p>
         </div>
-        <button onClick={handleAddProperty} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
+        <button onClick={() => setShowCreateModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
         ><Plus size={14} /> Add Property</button>
@@ -190,6 +222,62 @@ export default function Properties() {
           </div>
         ))}
       </div>
+
+      {/* Add Property Modal */}
+      {showCreateModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "480px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Plus size={18} color="#ec4899" /> Add Property</h2>
+              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Property Name</label>
+                <input type="text" placeholder="e.g. Sunrise Apartments" value={form.name} onChange={e => setForm({...form, name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Address Line 1</label>
+                <input type="text" placeholder="e.g. 123 Main St" value={form.address_line1} onChange={e => setForm({...form, address_line1: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>City</label>
+                  <input type="text" placeholder="e.g. New York" value={form.city} onChange={e => setForm({...form, city: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Property Type</label>
+                  <select value={form.property_type} onChange={e => setForm({...form, property_type: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                    <option value="residential">Residential</option>
+                    <option value="commercial">Commercial</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Number of Units to Auto-Generate</label>
+                <input type="number" min="1" max="100" placeholder="e.g. 5" value={form.unitsCount} onChange={e => setForm({...form, unitsCount: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                <p style={{ fontSize: "11px", color: "var(--text-3)", marginTop: "6px" }}>The system will automatically create empty (vacant) units numbered 1 through {form.unitsCount || 0} for this property.</p>
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setShowCreateModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitProperty} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
+                {isSubmitting ? <><Loader2 size={14} className="spin" /> Saving...</> : "Save Property"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+      `}} />
     </div>
   )
 }
