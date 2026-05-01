@@ -114,6 +114,7 @@ export default function Properties() {
       const unitsToInsert = [];
       for (let i = 1; i <= unitsNum; i++) {
         unitsToInsert.push({
+          organization_id,
           property_id: newProp.id,
           unit_number: `Unit ${i}`,
           status: 'vacant',
