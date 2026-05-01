@@ -125,7 +125,10 @@ export default function Leases() {
     
     setIsSubmitting(true);
     try {
+      const organization_id = await getOrCreateOrg();
+
       const { error: leaseErr } = await supabase.from('leases').insert({
+        organization_id,
         tenant_id: form.tenant_id,
         unit_id: form.unit_id,
         start_date: form.start_date,
