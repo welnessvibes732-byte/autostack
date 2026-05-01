@@ -1,50 +1,107 @@
 "use client"
-import { useRef } from "react"
+import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Receipt, Plus, FileText, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { Receipt, Plus, FileText, AlertTriangle, CheckCircle2, X, Loader2, Upload } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
-const INVOICES = [
-  { id: "INV-2026-04-001", vendor: "Elite Plumbing", unit: "Unit 4A", amount: "₹12,500", ocr: "100%", ocrOk: true, status: "Pending", statusColor: "#f59e0b" },
-  { id: "INV-2026-04-002", vendor: "SparkFix Electrical", unit: "Unit 8B", amount: "₹8,200", ocr: "94%", ocrOk: true, status: "Approved", statusColor: "#10b981" },
-  { id: "INV-2026-04-003", vendor: "ColorPro Paints", unit: "Unit 12C", amount: "₹22,000", ocr: "71%", ocrOk: false, status: "Anomaly", statusColor: "#f43f5e" },
-]
-
 export default function Invoices() {
   const ref = useRef<HTMLDivElement>(null)
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showModal, setShowModal] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [form, setForm] = useState({ vendor_name: "", amount: "", unit_id: "", invoice_date: new Date().toISOString().split("T")[0] })
+  const [unitsList, setUnitsList] = useState<any[]>([])
+
+  const STATUS_COLOR: Record<string, string> = {
+    pending:  "#f59e0b",
+    approved: "#10b981",
+    rejected: "#f43f5e",
+    anomaly:  "#f43f5e",
+    paid:     "#3b82f6",
+  }
+
+  useEffect(() => { fetchInvoices() }, [])
+
+  async function fetchInvoices() {
+    try {
+      const { data, error } = await supabase
+        .from("invoices")
+        .select("*, unit:units(unit_number, property:properties(name))")
+        .order("created_at", { ascending: false })
+      if (error) throw error
+      setInvoices(data || [])
+    } catch (e) { console.error(e) }
+    finally { setLoading(false) }
+  }
+
+  async function openModal() {
+    const { data } = await supabase.from("units").select("id, unit_number, property:properties(name)")
+    if (data) setUnitsList(data)
+    setShowModal(true)
+  }
+
+  async function submitInvoice() {
+    if (!form.vendor_name || !form.amount) { alert("Please enter vendor name and amount."); return }
+    setIsSubmitting(true)
+    try {
+      const organization_id = await getOrCreateOrg()
+      const { error } = await supabase.from("invoices").insert({
+        organization_id,
+        vendor_name: form.vendor_name,
+        amount: parseFloat(form.amount),
+        unit_id: form.unit_id || null,
+        invoice_date: form.invoice_date,
+        status: "pending",
+      })
+      if (error) throw error
+      setShowModal(false)
+      setForm({ vendor_name: "", amount: "", unit_id: "", invoice_date: new Date().toISOString().split("T")[0] })
+      fetchInvoices()
+    } catch (err: any) {
+      alert("Error: " + err.message)
+    } finally { setIsSubmitting(false) }
+  }
+
+  const pendingCount  = invoices.filter(i => i.status === "pending").length
+  const anomalyCount  = invoices.filter(i => i.status === "anomaly" || i.status === "rejected").length
+  const totalAmount   = invoices.reduce((s, i) => s + Number(i.amount || 0), 0)
+  const totalStr      = totalAmount >= 100000 ? `₹${(totalAmount / 100000).toFixed(1)}L` : `₹${(totalAmount / 1000).toFixed(1)}K`
 
   useGSAP(() => {
+    if (loading) return
     gsap.timeline({ defaults: { ease: "power3.out" } })
       .fromTo(".page-header", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45 })
       .fromTo(".anim-stat",   { opacity: 0, y: 20, scale: 0.93 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.07, ease: "back.out(1.3)" }, "-=0.2")
-      .fromTo(".anim-filter", { opacity: 0, y: 10 }, { opacity: 1, y: 0, duration: 0.3 }, "-=0.15")
       .fromTo(".anim-row",    { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.09 }, "-=0.1")
-  }, { scope: ref })
+  }, { scope: ref, dependencies: [loading] })
 
   return (
     <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)"  }}>
+      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)" }}>
         <div>
           <p style={{ color: "var(--text-3)", fontSize: "12px", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: "4px" }}>FINANCE</p>
           <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
             <Receipt size={22} color="var(--text-2)" /> Invoices
           </h1>
-          <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Vendor invoices, OCR extraction, and anomaly detection.</p>
+          <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Vendor invoices and payment tracking.</p>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+        <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-        ><input type="file" hidden onChange={(e) => { if(e.target.files) alert("Invoice upload triggered for " + e.target.files[0].name) }} /><Plus size={14} /> Upload Invoice</label>
+        ><Plus size={14} /> Add Invoice</button>
       </header>
 
       {/* Stats */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
         {[
-          { label: "Pending Approval", value: "4",    color: "#f59e0b", icon: Receipt },
-          { label: "Anomalies Found",  value: "1",    color: "#f43f5e", icon: AlertTriangle },
-          { label: "Processed (30d)",  value: "₹2.8L",color: "#10b981", icon: CheckCircle2 },
+          { label: "Pending Approval", value: pendingCount, color: "#f59e0b", icon: Receipt },
+          { label: "Anomalies Found",  value: anomalyCount, color: "#f43f5e", icon: AlertTriangle },
+          { label: "Total (All Time)", value: totalStr,     color: "#10b981", icon: CheckCircle2 },
         ].map(({ label, value, color, icon: Icon }) => (
           <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: "#0D0D0D", border: "1px solid #1E1E1E", display: "flex", alignItems: "center", gap: "14px", cursor: "default" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { y: -3, boxShadow: `0 12px 30px ${color}25`, duration: 0.25 })}
@@ -62,7 +119,7 @@ export default function Invoices() {
       </div>
 
       {/* Filter */}
-      <div className="anim-filter" style={{ display: "flex", gap: "10px" }}>
+      <div style={{ display: "flex", gap: "10px" }}>
         {["All", "Pending", "Approved", "Anomaly"].map((f, i) => (
           <button key={f} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: i === 0 ? "rgba(255,255,255,0.08)" : "transparent", border: i === 0 ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: i === 0 ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
             onMouseEnter={e => { if(i!==0){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
@@ -76,40 +133,89 @@ export default function Invoices() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border)" }}>
-              {["Invoice ID","Vendor","Unit","Amount","OCR Match","Status",""].map(h => (
+              {["Vendor","Unit","Amount","Date","Status",""].map(h => (
                 <th key={h} style={{ padding: "12px 18px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.06em", fontFamily: "'DM Mono',monospace", textTransform: "uppercase" }}>{h}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {INVOICES.map((inv, i) => (
-              <tr key={inv.id} className="anim-row" style={{ borderBottom: i < INVOICES.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-              >
-                <td style={{ padding: "14px 18px", fontSize: "12px", color: "var(--text-2)", fontFamily: "'DM Mono',monospace" }}>{inv.id}</td>
-                <td style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 600, color: "#fff" }}>{inv.vendor}</td>
-                <td style={{ padding: "14px 18px", fontSize: "13px", color: "var(--text-2)" }}>{inv.unit}</td>
-                <td style={{ padding: "14px 18px", fontSize: "14px", fontWeight: 700, color: "#fff", fontFamily: "'DM Mono',monospace" }}>{inv.amount}</td>
-                <td style={{ padding: "14px 18px" }}>
-                  <span style={{ display: "inline-flex", alignItems: "center", gap: "5px", fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: inv.ocrOk ? "rgba(16,185,129,0.12)" : "rgba(244,63,94,0.12)", color: inv.ocrOk ? "#34d399" : "#fb7185", border: `1px solid ${inv.ocrOk ? "rgba(16,185,129,0.25)" : "rgba(244,63,94,0.25)"}` }}>
-                    <FileText size={10} /> {inv.ocr}
-                  </span>
-                </td>
-                <td style={{ padding: "14px 18px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${inv.statusColor}15`, color: inv.statusColor, border: `1px solid ${inv.statusColor}30` }}>{inv.status}</span>
-                </td>
-                <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                  <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "color 0.15s" }}
-                    onMouseEnter={e => (e.currentTarget.style.color = "#fff")}
-                    onMouseLeave={e => (e.currentTarget.style.color = "#93c5fd")}
-                  >Review →</button>
-                </td>
-              </tr>
-            ))}
+            {loading ? (
+              [1,2,3].map(i => (
+                <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
+                  {[1,2,3,4,5,6].map(j => <td key={j} style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "16px", width: "80px" }} /></td>)}
+                </tr>
+              ))
+            ) : invoices.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--text-3)", fontSize: "14px" }}>No invoices yet. Add your first vendor invoice.</td></tr>
+            ) : invoices.map((inv, i) => {
+              const sColor = STATUS_COLOR[inv.status] || "#A1A1AA"
+              const unitLabel = inv.unit ? `${inv.unit.property?.name ? inv.unit.property.name + " – " : ""}${inv.unit.unit_number}` : "—"
+              const amount = Number(inv.amount || 0)
+              const amountStr = amount >= 100000 ? `₹${(amount/100000).toFixed(1)}L` : `₹${amount.toLocaleString("en-IN")}`
+              const date = new Date(inv.invoice_date || inv.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+              return (
+                <tr key={inv.id} className="anim-row" style={{ borderBottom: i < invoices.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
+                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
+                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
+                >
+                  <td style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 600, color: "#fff" }}>{inv.vendor_name || "—"}</td>
+                  <td style={{ padding: "14px 18px", fontSize: "13px", color: "var(--text-2)" }}>{unitLabel}</td>
+                  <td style={{ padding: "14px 18px", fontSize: "14px", fontWeight: 700, color: "#10b981", fontFamily: "'DM Mono',monospace" }}>{amountStr}</td>
+                  <td style={{ padding: "14px 18px", fontSize: "12px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{date}</td>
+                  <td style={{ padding: "14px 18px" }}>
+                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${sColor}15`, color: sColor, border: `1px solid ${sColor}30`, textTransform: "capitalize" }}>{inv.status}</span>
+                  </td>
+                  <td style={{ padding: "14px 18px", textAlign: "right" }}>
+                    <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer" }}>View →</button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
+
+      {/* Add Invoice Modal */}
+      {showModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "460px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Receipt size={18} color="#ec4899" /> Add Invoice</h2>
+              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vendor Name</label>
+                <input type="text" placeholder="e.g. SparkFix Electrical" value={form.vendor_name} onChange={e => setForm({...form, vendor_name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none" }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Amount (₹)</label>
+                  <input type="number" placeholder="e.g. 12500" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Invoice Date</label>
+                  <input type="date" value={form.invoice_date} onChange={e => setForm({...form, invoice_date: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none" }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Related Unit (optional)</label>
+                <select value={form.unit_id} onChange={e => setForm({...form, unit_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer" }}>
+                  <option value="">Not unit-specific</option>
+                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.property?.name ? `${u.property.name} – ` : ""}{u.unit_number}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setShowModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitInvoice} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
+                {isSubmitting ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Save Invoice"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <style dangerouslySetInnerHTML={{__html: `@keyframes spin { 100% { transform: rotate(360deg); } }`}} />
     </div>
   )
 }
