@@ -163,6 +163,7 @@ export default function Leases() {
       if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
 
       const leaseId = window.prompt("Enter Lease ID this document belongs to (or leave blank if unassigned):");
+      const tenantInput = window.prompt("Enter Tenant Name or ID this lease belongs to:");
 
       // Insert row into documents
       const { error: dbErr } = await supabase.from('documents').insert({
@@ -183,7 +184,14 @@ export default function Leases() {
         await fetch('http://webhook.n8n/local', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'lease_uploaded', file_path: filePath, lease_id: leaseId })
+          body: JSON.stringify({ 
+            event: 'lease_uploaded', 
+            file_path: filePath, 
+            lease_id: leaseId,
+            organization_id: organization_id,
+            tenant_id: tenantInput,
+            file_name: file.name
+          })
         });
       } catch(webhookErr) {
         console.warn("Webhook failed (expected if n8n not running locally):", webhookErr);
