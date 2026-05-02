@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Wrench, Plus, Users, AlertCircle, Clock, CheckCircle2, X, Loader2 } from "lucide-react"
+import { Wrench, Plus, Users, AlertCircle, Clock, CheckCircle2, X, Loader2, Upload, UserPlus } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
@@ -16,6 +16,12 @@ export default function Maintenance() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({ issue: "", priority: "medium", unit_id: "" })
   const [unitsList, setUnitsList] = useState<any[]>([])
+  const [uploadPhoto, setUploadPhoto] = useState<File | null>(null)
+
+  // Vendor Modal States
+  const [showVendorModal, setShowVendorModal] = useState(false)
+  const [isSubmittingVendor, setIsSubmittingVendor] = useState(false)
+  const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "" })
 
   const PRIORITY_COLOR: Record<string, string> = { high: "#f43f5e", medium: "#f59e0b", low: "#10b981", urgent: "#f43f5e" }
   const STATUS_COLOR:   Record<string, string> = { open: "#f59e0b", in_progress: "#3b82f6", closed: "#10b981", resolved: "#10b981" }
@@ -47,20 +53,60 @@ export default function Maintenance() {
     setIsSubmitting(true)
     try {
       const organization_id = await getOrCreateOrg()
+      
+      let photoPaths: string[] = []
+      if (uploadPhoto) {
+        const filePath = `${organization_id}/${Date.now()}_${uploadPhoto.name}`
+        const { error: uploadErr } = await supabase.storage.from("maintenance_photos").upload(filePath, uploadPhoto)
+        if (uploadErr) throw new Error("Photo upload failed: " + uploadErr.message)
+        photoPaths.push(filePath)
+      }
+
       const { error } = await supabase.from("maintenance_tickets").insert({
         organization_id,
         unit_id: form.unit_id || null,
-        issue_description: form.issue,
+        title: form.issue.substring(0, 50),
+        description: form.issue,
         priority: form.priority,
         status: "open",
+        photos: photoPaths
       })
       if (error) throw error
       setShowModal(false)
       setForm({ issue: "", priority: "medium", unit_id: "" })
+      setUploadPhoto(null)
       fetchTickets()
     } catch (err: any) {
       alert("Error: " + err.message)
     } finally { setIsSubmitting(false) }
+  }
+
+  async function completeTicket(id: string) {
+    try {
+      const { error } = await supabase.from("maintenance_tickets").update({ status: "completed" }).eq("id", id)
+      if (error) throw error
+      fetchTickets()
+    } catch (err: any) { alert("Error completing ticket: " + err.message) }
+  }
+
+  async function submitVendor() {
+    if (!vendorForm.name) { alert("Please enter the vendor name."); return }
+    setIsSubmittingVendor(true)
+    try {
+      const organization_id = await getOrCreateOrg()
+      const { error } = await supabase.from("vendors").insert({
+        organization_id,
+        name: vendorForm.name,
+        category: vendorForm.category ? [vendorForm.category] : [],
+        phone: vendorForm.phone,
+        email: vendorForm.email
+      })
+      if (error) throw error
+      setShowVendorModal(false)
+      setVendorForm({ name: "", category: "", phone: "", email: "" })
+    } catch (err: any) {
+      alert("Error: " + err.message)
+    } finally { setIsSubmittingVendor(false) }
   }
 
   const openCount      = tickets.filter(t => t.status === "open").length
@@ -85,10 +131,18 @@ export default function Maintenance() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Ticket tracking, vendor assignment, and issue resolution.</p>
         </div>
-        <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 4px 16px rgba(255,86,86,0.25)" }}
-          onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 })}
-          onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-        ><Plus size={14} /> New Ticket</button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button onClick={() => setShowVendorModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
+          >
+            <UserPlus size={14} /> Add Vendor
+          </button>
+          <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 4px 16px rgba(255,86,86,0.25)" }}
+            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 })}
+            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
+          ><Plus size={14} /> New Ticket</button>
+        </div>
       </header>
 
       {/* Stats */}
@@ -148,7 +202,14 @@ export default function Maintenance() {
                   <td style={{ padding: "14px 18px" }}><span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${sColor}15`, color: sColor, border: `1px solid ${sColor}30`, textTransform: "capitalize" }}>{t.status?.replace("_"," ")}</span></td>
                   <td style={{ padding: "14px 18px", fontSize: "12px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{date}</td>
                   <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                    <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer" }}>View →</button>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px" }}>
+                      {["open", "in_progress"].includes(t.status) && (
+                        <button onClick={() => completeTicket(t.id)} style={{ padding: "6px 12px", borderRadius: "6px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#10b981", fontSize: "11px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <CheckCircle2 size={12} /> Complete
+                        </button>
+                      )}
+                      <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer" }}>View →</button>
+                    </div>
                   </td>
                 </tr>
               )
@@ -186,6 +247,17 @@ export default function Maintenance() {
                   <option value="urgent">Urgent</option>
                 </select>
               </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Upload Photo (Optional)</label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "80px", border: "1px dashed #333", borderRadius: "10px", background: "rgba(255,255,255,0.02)", cursor: "pointer", position: "relative" }}>
+                  <input type="file" accept="image/*" onChange={e => setUploadPhoto(e.target.files?.[0] || null)} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+                  {uploadPhoto ? (
+                    <span style={{ fontSize: "13px", color: "#3b82f6", fontWeight: 500 }}>{uploadPhoto.name}</span>
+                  ) : (
+                    <span style={{ fontSize: "13px", color: "var(--text-3)", display: "flex", alignItems: "center", gap: "6px" }}><Upload size={14} /> Click to upload image</span>
+                  )}
+                </div>
+              </div>
             </div>
             <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
               <button onClick={() => setShowModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
@@ -196,6 +268,45 @@ export default function Maintenance() {
           </div>
         </div>
       )}
+
+      {/* Add Vendor Modal */}
+      {showVendorModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "460px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><UserPlus size={18} color="#ec4899" /> New Vendor</h2>
+              <button onClick={() => setShowVendorModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vendor Name</label>
+                <input type="text" value={vendorForm.name} onChange={e => setVendorForm({...vendorForm, name: e.target.value})} placeholder="e.g. SparkFix Electrical" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Category</label>
+                  <input type="text" value={vendorForm.category} onChange={e => setVendorForm({...vendorForm, category: e.target.value})} placeholder="e.g. Plumbing" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone</label>
+                  <input type="text" value={vendorForm.phone} onChange={e => setVendorForm({...vendorForm, phone: e.target.value})} placeholder="+91..." style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+              </div>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</label>
+                <input type="email" value={vendorForm.email} onChange={e => setVendorForm({...vendorForm, email: e.target.value})} placeholder="contact@sparkfix.com" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+            </div>
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setShowVendorModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitVendor} disabled={isSubmittingVendor} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmittingVendor ? "not-allowed" : "pointer", opacity: isSubmittingVendor ? 0.7 : 1 }}>
+                {isSubmittingVendor ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Add Vendor"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `@keyframes spin { 100% { transform: rotate(360deg); } }`}} />
     </div>
   )

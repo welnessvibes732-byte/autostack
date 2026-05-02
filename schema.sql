@@ -17,6 +17,7 @@ CREATE TABLE organizations (
   stripe_customer_id TEXT,
   stripe_subscription_id TEXT,
   unit_count        INT DEFAULT 0,
+  lead_settings     JSONB,
   owner_id          UUID REFERENCES auth.users(id),
   created_at        TIMESTAMPTZ DEFAULT now(),
   updated_at        TIMESTAMPTZ DEFAULT now()

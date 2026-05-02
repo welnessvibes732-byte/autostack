@@ -186,7 +186,7 @@ export default function Leases() {
 
       // Call n8n webhook
       try {
-        await fetch('http://webhook.n8n/local', {
+        await fetch('http://localhost:5678/webhook-test/d093c250-b1dc-4575-a910-4f87312fb238', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
