@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Plus, Upload, Search, KeySquare, FileText, AlertTriangle, X, Loader2 } from "lucide-react"
+import { Plus, Upload, Search, KeySquare, FileText, AlertTriangle, X, Loader2, CheckCircle2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
@@ -25,6 +25,12 @@ export default function Leases() {
     expiry_date: new Date(Date.now() + 31536000000).toISOString().split('T')[0],
     rent_amount: ""
   })
+
+  // Upload states
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const [uploadFile, setUploadFile] = useState<File | null>(null)
+  const [uploadTenantId, setUploadTenantId] = useState("")
+  const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'processing'|'success'>('idle')
 
   useEffect(() => {
     async function fetchLeases() {
@@ -104,7 +110,7 @@ export default function Leases() {
 
   // Fetch tenants and units when opening modal
   useEffect(() => {
-    if (showCreateModal) {
+    if (showCreateModal || showUploadModal) {
       const fetchFormOptions = async () => {
         const [{ data: tData }, { data: uData }] = await Promise.all([
           supabase.from('tenants').select('id, full_name'),
@@ -115,7 +121,7 @@ export default function Leases() {
       };
       fetchFormOptions();
     }
-  }, [showCreateModal])
+  }, [showCreateModal, showUploadModal])
 
   const submitLease = async () => {
     if (!form.tenant_id || !form.unit_id || !form.start_date || !form.expiry_date || !form.rent_amount) {
@@ -150,34 +156,33 @@ export default function Leases() {
     }
   }
 
-  const handleUploadLease = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const submitUpload = async () => {
+    if (!uploadFile) return;
+
+    setShowUploadModal(false);
+    setUploadStatus('uploading');
 
     try {
       const organization_id = await getOrCreateOrg();
 
       // Upload to bucket
-      const filePath = `${organization_id}/${Date.now()}_${file.name}`;
-      const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
+      const filePath = `${organization_id}/${Date.now()}_${uploadFile.name}`;
+      const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, uploadFile);
       if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
 
-      const leaseId = window.prompt("Enter Lease ID this document belongs to (or leave blank if unassigned):");
-      const tenantInput = window.prompt("Enter Tenant Name or ID this lease belongs to:");
+      setUploadStatus('processing');
 
       // Insert row into documents
       const { error: dbErr } = await supabase.from('documents').insert({
         organization_id,
-        lease_id: leaseId || null,
+        lease_id: null,
         file_path: filePath,
-        file_name: file.name,
+        file_name: uploadFile.name,
         doc_type: 'lease',
         authority_level: 4,
         index_status: 'pending'
       });
       if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
-
-      alert("File uploaded. Triggering n8n webhook...");
 
       // Call n8n webhook
       try {
@@ -187,19 +192,24 @@ export default function Leases() {
           body: JSON.stringify({ 
             event: 'lease_uploaded', 
             file_path: filePath, 
-            lease_id: leaseId,
+            lease_id: null,
             organization_id: organization_id,
-            tenant_id: tenantInput,
-            file_name: file.name
+            tenant_id: uploadTenantId || null,
+            file_name: uploadFile.name
           })
         });
       } catch(webhookErr) {
         console.warn("Webhook failed (expected if n8n not running locally):", webhookErr);
       }
 
-      alert("Upload complete and webhook triggered successfully!");
+      setUploadStatus('success');
+      setTimeout(() => setUploadStatus('idle'), 4000); // hide after 4s
+      
+      setUploadFile(null);
+      setUploadTenantId("");
     } catch (err: any) {
       alert("Error: " + err.message);
+      setUploadStatus('idle');
     }
   }
 
@@ -222,13 +232,12 @@ export default function Leases() {
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Active, expiring, and historical agreements.</p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+          <button onClick={() => setShowUploadModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
             onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
           >
-            <input type="file" accept="application/pdf" hidden onChange={handleUploadLease} />
             <Upload size={14} /> Upload Lease Contract
-          </label>
+          </button>
           <button onClick={() => setShowCreateModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
@@ -367,9 +376,69 @@ export default function Leases() {
         </div>
       )}
 
+      {/* Upload Modal */}
+      {showUploadModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "400px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Upload size={18} color="#3b82f6" /> Upload Lease</h2>
+              <button onClick={() => setShowUploadModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Document (PDF)</label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100px", border: "1px dashed var(--border-2)", borderRadius: "10px", background: "rgba(255,255,255,0.02)", cursor: "pointer", position: "relative" }}>
+                  <input type="file" accept="application/pdf" onChange={e => setUploadFile(e.target.files?.[0] || null)} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+                  {uploadFile ? (
+                    <span style={{ fontSize: "14px", color: "#3b82f6", fontWeight: 500, display: "flex", alignItems: "center", gap: "8px" }}><FileText size={16} /> {uploadFile.name}</span>
+                  ) : (
+                    <span style={{ fontSize: "13px", color: "var(--text-3)" }}>Click or drag PDF here</span>
+                  )}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Assign to Tenant</label>
+                <select value={uploadTenantId} onChange={e => setUploadTenantId(e.target.value)} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
+                  <option value="">Leave Unassigned</option>
+                  {tenantsList.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setShowUploadModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitUpload} disabled={!uploadFile} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: uploadFile ? "#3b82f6" : "#1E1E1E", border: "none", color: uploadFile ? "#fff" : "#666", fontSize: "13px", fontWeight: 600, cursor: uploadFile ? "pointer" : "not-allowed" }}>
+                Upload Document
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Upload Status Toast */}
+      {uploadStatus !== 'idle' && (
+        <div style={{ position: "fixed", bottom: "30px", right: "30px", zIndex: 1000, background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", animation: "slideUp 0.3s ease-out forwards" }}>
+          {uploadStatus === 'uploading' && <Loader2 size={18} color="#3b82f6" className="spin" />}
+          {uploadStatus === 'processing' && <Loader2 size={18} color="#f59e0b" className="spin" />}
+          {uploadStatus === 'success' && <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}><CheckCircle2 size={12} color="#fff" /></div>}
+          
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>
+              {uploadStatus === 'uploading' ? 'Uploading document...' : uploadStatus === 'processing' ? 'Processing with AI...' : 'Upload complete!'}
+            </span>
+            <span style={{ fontSize: "12px", color: "var(--text-3)" }}>
+              {uploadStatus === 'uploading' ? 'Saving to secure storage' : uploadStatus === 'processing' ? 'Extracting lease details' : 'Document has been queued for review'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes slideUp { from { opacity: 0, transform: translateY(20px); } to { opacity: 1, transform: translateY(0); } }
       `}} />
     </div>
   )
