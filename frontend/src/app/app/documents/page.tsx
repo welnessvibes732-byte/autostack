@@ -95,19 +95,19 @@ export default function Documents() {
       if (dbErr) throw new Error("Database Insert Error: " + dbErr.message)
 
       // Call n8n webhook
-      try {
-        await fetch('http://localhost:5678/webhook-test/02169021-3bd5-4731-9232-18ee8906ce05', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            event: 'document_uploaded', 
-            file_path: filePath, 
-            organization_id: organization_id,
-            file_name: file.name
-          })
+      const webhookRes = await fetch('http://localhost:5678/webhook-test/02169021-3bd5-4731-9232-18ee8906ce05', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          event: 'document_uploaded', 
+          file_path: filePath, 
+          organization_id: organization_id,
+          file_name: file.name
         })
-      } catch(webhookErr) {
-        console.warn("Webhook failed (expected if n8n not running locally):", webhookErr)
+      });
+
+      if (!webhookRes.ok) {
+        throw new Error(`n8n Webhook failed with status: ${webhookRes.status}. Make sure "Listen for Test Event" is active!`);
       }
 
       setUploadStatus('success')
