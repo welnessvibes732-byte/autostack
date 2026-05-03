@@ -38,14 +38,14 @@ export async function POST(req: NextRequest) {
         property_id = existing.id
         property_match = 'matched'
       } else {
-        const { data: created } = await supabase
+        const { data: created, error } = await supabase
           .from('properties')
           .insert({
             organization_id: org_id,
-            name:            prop.address_line1,
-            address_line1:   prop.address_line1,
+            name:            prop.address_line1  || 'Unknown Property',
+            address_line1:   prop.address_line1  || 'Unknown Address',
             address_line2:   prop.address_line2  || null,
-            city:            prop.city           || null,
+            city:            prop.city           || 'Unknown',
             state:           prop.state          || null,
             pincode:         prop.pincode        || null,
             owner_name:      prop.owner_name     || null,
@@ -57,6 +57,7 @@ export async function POST(req: NextRequest) {
           .select('id')
           .single()
 
+        if (error) console.error("Property insert error:", error);
         if (created) { property_id = created.id; property_match = 'created' }
       }
     }
@@ -78,12 +79,12 @@ export async function POST(req: NextRequest) {
         unit_id = existing.id
         unit_match = 'matched'
       } else {
-        const { data: created } = await supabase
+        const { data: created, error } = await supabase
           .from('units')
           .insert({
             property_id,
             organization_id: org_id,
-            unit_number:     unit.unit_number,
+            unit_number:     unit.unit_number || 'Unknown',
             unit_type:       unit.unit_type    || null,
             area_sqft:       unit.area_sqft    || null,
             floor_number:    unit.floor_number || null,
@@ -92,6 +93,7 @@ export async function POST(req: NextRequest) {
           .select('id')
           .single()
 
+        if (error) console.error("Unit insert error:", error);
         if (created) { unit_id = created.id; unit_match = 'created' }
       }
     }
@@ -156,12 +158,12 @@ export async function POST(req: NextRequest) {
         }
       } else {
         // Create new tenant
-        const { data: created } = await supabase
+        const { data: created, error } = await supabase
           .from('tenants')
           .insert({
             organization_id:         org_id,
-            full_name:               tenant.full_name               || null,
-            phone:                   tenant.phone                   || null,
+            full_name:               tenant.full_name               || 'Unknown Tenant',
+            phone:                   tenant.phone                   || 'Unknown',
             email:                   tenant.email                   || null,
             whatsapp_number:         tenant.whatsapp_number         || null,
             id_type:                 tenant.id_type                 || null,
@@ -176,6 +178,7 @@ export async function POST(req: NextRequest) {
           .select('id')
           .single()
 
+        if (error) console.error("Tenant insert error:", error);
         if (created) { tenant_id = created.id; tenant_match = 'created' }
       }
     }
