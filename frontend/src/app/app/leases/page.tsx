@@ -189,9 +189,11 @@ export default function Leases() {
 
       const document_id = docData?.id || null;
 
-      // Get public URL for n8n to download the file
-      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath);
-      const public_url = urlData?.publicUrl || null;
+      // Bucket is private — generate a signed URL (2 hours) so n8n can download the file
+      const { data: signedData } = await supabase.storage
+        .from('documents')
+        .createSignedUrl(filePath, 7200); // 7200 seconds = 2 hours
+      const download_url = signedData?.signedUrl || null;
 
       // Call n8n webhook with full metadata
       try {
@@ -200,9 +202,9 @@ export default function Leases() {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             event:           'lease_uploaded',
-            document_id:     document_id,      // ← n8n uses this to update index_status
+            document_id:     document_id,      // ← n8n updates index_status using this
             file_path:       filePath,
-            public_url:      public_url,        // ← n8n downloads from here
+            download_url:    download_url,     // ← n8n HTTP Request node downloads from here (signed, 2hr)
             file_name:       uploadFile.name,
             file_size_bytes: uploadFile.size,
             organization_id: organization_id,
