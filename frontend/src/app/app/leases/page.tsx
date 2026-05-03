@@ -196,24 +196,24 @@ export default function Leases() {
       const download_url = signedData?.signedUrl || null;
 
       // Call n8n webhook with full metadata
-      try {
-        await fetch('http://localhost:5678/webhook-test/d093c250-b1dc-4575-a910-4f87312fb238', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            event:           'lease_uploaded',
-            document_id:     document_id,      // ← n8n updates index_status using this
-            file_path:       filePath,
-            download_url:    download_url,     // ← n8n HTTP Request node downloads from here (signed, 2hr)
-            file_name:       uploadFile.name,
-            file_size_bytes: uploadFile.size,
-            organization_id: organization_id,
-            tenant_id:       uploadTenantId || null,
-            lease_id:        null,
-          })
-        });
-      } catch(webhookErr) {
-        console.warn("Webhook failed (expected if n8n not running locally):", webhookErr);
+      const webhookRes = await fetch('http://localhost:5678/webhook-test/02169021-3bd5-4731-9232-18ee8906ce05', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          event:           'lease_uploaded',
+          document_id:     document_id,      // ← n8n updates index_status using this
+          file_path:       filePath,
+          download_url:    download_url,     // ← n8n HTTP Request node downloads from here (signed, 2hr)
+          file_name:       uploadFile.name,
+          file_size_bytes: uploadFile.size,
+          organization_id: organization_id,
+          tenant_id:       uploadTenantId || null,
+          lease_id:        null,
+        })
+      });
+
+      if (!webhookRes.ok) {
+        throw new Error(`n8n Webhook failed with status: ${webhookRes.status}. Make sure "Listen for Test Event" is active!`);
       }
 
       setUploadStatus('success');
