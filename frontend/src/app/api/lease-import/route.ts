@@ -22,15 +22,15 @@ export async function POST(req: NextRequest) {
     let property_id: string | null = null
     let property_match = 'none'
 
-    if (prop?.address_line1) {
+    if (prop) {
       let query = supabase
         .from('properties')
         .select('id')
-        .ilike('address_line1', prop.address_line1)
+        .ilike('address_line1', prop.address_line1 || 'Unknown Address')
 
       if (org_id)      query = query.eq('organization_id', org_id)
       if (prop.pincode) query = query.eq('pincode', prop.pincode)
-      else if (prop.city) query = query.ilike('city', prop.city)
+      else if (prop.city) query = query.ilike('city', prop.city || 'Unknown')
 
       const { data: existing } = await query.limit(1).single()
 
@@ -66,11 +66,11 @@ export async function POST(req: NextRequest) {
     let unit_id: string | null = null
     let unit_match = 'none'
 
-    if (unit?.unit_number && property_id) {
+    if (unit && property_id) {
       const { data: existing } = await supabase
         .from('units')
         .select('id')
-        .ilike('unit_number', unit.unit_number)
+        .ilike('unit_number', unit.unit_number || 'Unknown')
         .eq('property_id', property_id)
         .limit(1)
         .single()
