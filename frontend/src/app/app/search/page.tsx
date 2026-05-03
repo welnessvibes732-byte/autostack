@@ -2,7 +2,7 @@
 import { useState, useRef } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Search, Sparkles, FileText, Database } from "lucide-react"
+import { Search, Sparkles, FileText, Database, Loader2 } from "lucide-react"
 
 gsap.registerPlugin(useGSAP)
 
@@ -18,6 +18,8 @@ export default function AISearch() {
   const inputRef = useRef<HTMLInputElement>(null)
   const [query, setQuery] = useState("")
   const [answered, setAnswered] = useState(false)
+  const [aiResponse, setAiResponse] = useState("")
+  const [isSearching, setIsSearching] = useState(false)
 
   useGSAP(() => {
     gsap.timeline({ defaults: { ease: "power3.out" } })
@@ -27,14 +29,38 @@ export default function AISearch() {
       .fromTo(".search-result", { opacity: 0, y: 16  }, { opacity: 1, y: 0, duration: 0.4 }, "-=0.05")
   }, { scope: ref })
 
-  const handleSearch = (q = query) => {
-    if (!q.trim()) return
+  const handleSearch = async (q = query) => {
+    if (!q.trim() || isSearching) return
     setQuery(q)
-    gsap.to(".search-result", { opacity: 0, y: 8, duration: 0.2, onComplete: () => {
+    setIsSearching(true)
+    
+    gsap.to(".search-result", { opacity: 0, y: 8, duration: 0.2 })
+    
+    try {
+      const res = await fetch("http://localhost:5678/webhook-test/propiq-lease-query", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: q })
+      })
+      
+      let text = ""
+      try {
+        const json = await res.json()
+        text = json.output || json.response || json.text || json.message || JSON.stringify(json)
+      } catch (e) {
+        text = await res.text()
+      }
+      
+      setAiResponse(text)
       setAnswered(true)
+    } catch (error: any) {
+      setAiResponse("Error reaching AI service: " + error.message)
+      setAnswered(true)
+    } finally {
+      setIsSearching(false)
       gsap.fromTo(".search-result", { opacity: 0, y: 16 }, { opacity: 1, y: 0, duration: 0.4, ease: "power2.out" })
       gsap.fromTo(".result-source", { opacity: 0, x: -10 }, { opacity: 1, x: 0, duration: 0.3, stagger: 0.07, delay: 0.2 })
-    }})
+    }
   }
 
   return (
@@ -62,10 +88,12 @@ export default function AISearch() {
               onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
             />
           </div>
-          <button onClick={() => handleSearch()} style={{ padding: "0 24px", borderRadius: "12px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -1, duration: 0.2 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1,    y: 0,  duration: 0.3, ease: "back.out(1.5)" })}
-          >Search</button>
+          <button onClick={() => handleSearch()} disabled={isSearching} style={{ padding: "0 24px", borderRadius: "12px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: isSearching ? "not-allowed" : "pointer", opacity: isSearching ? 0.7 : 1, boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", minWidth: "100px" }}
+            onMouseEnter={e => !isSearching && gsap.to(e.currentTarget, { scale: 1.04, y: -1, duration: 0.2 })}
+            onMouseLeave={e => !isSearching && gsap.to(e.currentTarget, { scale: 1,    y: 0,  duration: 0.3, ease: "back.out(1.5)" })}
+          >
+            {isSearching ? <Loader2 size={18} className="spin" /> : 'Search'}
+          </button>
         </div>
 
         <div style={{ marginTop: "16px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
@@ -98,8 +126,8 @@ export default function AISearch() {
             <div style={{ width: "100%" }}>
               <div style={{ padding: "16px 20px", borderRadius: "10px", background: "rgba(59,130,246,0.06)", borderLeft: "3px solid #3b82f6", marginBottom: "16px" }}>
                 <div style={{ fontSize: "13px", fontWeight: 600, color: "#fff", marginBottom: "8px" }}>AI Response:</div>
-                <p style={{ color: "var(--text-2)", fontSize: "14px", lineHeight: 1.6, margin: 0 }}>
-                  Based on your portfolio data, the leases expiring next month are <strong style={{color:"#fff"}}>Unit 14B</strong> (Jane Smith, ₹45,000/mo) and <strong style={{color:"#fff"}}>Unit 2A</strong> (Rahul Kumar, ₹38,000/mo). Both require renewal action within 30 days.
+                <p style={{ color: "var(--text-2)", fontSize: "14px", lineHeight: 1.6, margin: 0, whiteSpace: "pre-wrap" }}>
+                  {aiResponse}
                 </p>
               </div>
               <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
@@ -120,6 +148,10 @@ export default function AISearch() {
           )}
         </div>
       </div>
+      <style dangerouslySetInnerHTML={{__html: `
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+      `}} />
     </div>
   )
 }

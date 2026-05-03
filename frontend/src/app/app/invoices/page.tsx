@@ -17,6 +17,9 @@ export default function Invoices() {
   const [form, setForm] = useState({ vendor_name: "", amount: "", unit_id: "", invoice_date: new Date().toISOString().split("T")[0] })
   const [unitsList, setUnitsList] = useState<any[]>([])
 
+  // Upload states
+  const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'processing'|'success'>('idle')
+
   const STATUS_COLOR: Record<string, string> = {
     pending:  "#f59e0b",
     approved: "#10b981",
@@ -67,6 +70,48 @@ export default function Invoices() {
     } finally { setIsSubmitting(false) }
   }
 
+  const handleFileUpload = async (file: File) => {
+    if (!file) return;
+    setUploadStatus('uploading');
+
+    try {
+      const organization_id = await getOrCreateOrg();
+      const filePath = `${organization_id}/${Date.now()}_${file.name}`;
+      
+      const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
+      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
+
+      setUploadStatus('processing');
+
+      const { error: dbErr } = await supabase.from('documents').insert({
+        organization_id,
+        lease_id: null,
+        file_path: filePath,
+        file_name: file.name,
+        doc_type: 'invoice',
+        authority_level: 4,
+        index_status: 'pending'
+      });
+      if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
+
+      try {
+        await fetch('http://localhost:5678/webhook-test/d093c250-b1dc-4575-a910-4f87312fb238', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: organization_id, file_name: file.name })
+        });
+      } catch(webhookErr) {
+        console.warn("Webhook failed:", webhookErr);
+      }
+
+      setUploadStatus('success');
+      setTimeout(() => setUploadStatus('idle'), 4000);
+    } catch (err: any) {
+      alert("Error: " + err.message);
+      setUploadStatus('idle');
+    }
+  }
+
   const pendingCount  = invoices.filter(i => i.status === "pending").length
   const anomalyCount  = invoices.filter(i => i.status === "anomaly" || i.status === "rejected").length
   const totalAmount   = invoices.reduce((s, i) => s + Number(i.amount || 0), 0)
@@ -90,10 +135,19 @@ export default function Invoices() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Vendor invoices and payment tracking.</p>
         </div>
-        <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
-          onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
-          onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-        ><Plus size={14} /> Add Invoice</button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
+          >
+            <input type="file" hidden onChange={(e) => { if(e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]) }} />
+            <Upload size={14} /> Upload Invoice PDF
+          </label>
+          <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
+            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
+            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
+          ><Plus size={14} /> Add Invoice</button>
+        </div>
       </header>
 
       {/* Stats */}
@@ -215,7 +269,30 @@ export default function Invoices() {
           </div>
         </div>
       )}
-      <style dangerouslySetInnerHTML={{__html: `@keyframes spin { 100% { transform: rotate(360deg); } }`}} />
+
+      {/* Upload Status Toast */}
+      {uploadStatus !== 'idle' && (
+        <div style={{ position: "fixed", bottom: "30px", right: "30px", zIndex: 1000, background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", animation: "slideUp 0.3s ease-out forwards" }}>
+          {uploadStatus === 'uploading' && <Loader2 size={18} color="#3b82f6" className="spin" />}
+          {uploadStatus === 'processing' && <Loader2 size={18} color="#f59e0b" className="spin" />}
+          {uploadStatus === 'success' && <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}><CheckCircle2 size={12} color="#fff" /></div>}
+          
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>
+              {uploadStatus === 'uploading' ? 'Uploading document...' : uploadStatus === 'processing' ? 'Processing with AI...' : 'Upload complete!'}
+            </span>
+            <span style={{ fontSize: "12px", color: "var(--text-3)" }}>
+              {uploadStatus === 'uploading' ? 'Saving to secure storage' : uploadStatus === 'processing' ? 'Extracting details' : 'Document has been queued for review'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes slideUp { from { opacity: 0, transform: translateY(20px); } to { opacity: 1, transform: translateY(0); } }
+      `}} />
     </div>
   )
 }

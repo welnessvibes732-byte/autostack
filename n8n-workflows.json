@@ -1,0 +1,147 @@
+{
+  "name": "AutoStack - Maintenance & Leads Workflows",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-qualification",
+        "options": {}
+      },
+      "id": "f516a760-4497-4ab2-811d-61f2f01f8087",
+      "name": "Webhook - Lead Qualification",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        220,
+        240
+      ],
+      "webhookId": "lead-qualification"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-follow-up",
+        "options": {}
+      },
+      "id": "b1b70221-c4d3-4a1d-a9db-84b2326ef2cf",
+      "name": "Webhook - Lead Follow Up",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        220,
+        460
+      ],
+      "webhookId": "lead-follow-up"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "maintenance-ticket",
+        "options": {}
+      },
+      "id": "92f702a4-db08-417d-b541-11d4d3d3a432",
+      "name": "Webhook - Maintenance Ticket",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        220,
+        680
+      ],
+      "webhookId": "maintenance-ticket"
+    },
+    {
+      "parameters": {
+        "fromEmail": "admin@yourdomain.com",
+        "toEmail": "={{ $json.body.email }}",
+        "subject": "Thanks for your interest! Please qualify.",
+        "html": "Hi {{ $json.body.full_name }},<br><br>Thanks for your interest. Please let us know:<br>1. When are you looking to move?<br>2. Do you have any pets?",
+        "options": {}
+      },
+      "id": "d748f3b6-98ab-4ec7-a3a8-a8d672921503",
+      "name": "Send Qualification Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        520,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "admin@yourdomain.com",
+        "toEmail": "={{ $json.body.email }}",
+        "subject": "Following up on your property inquiry",
+        "html": "Hi,<br><br>We are following up on your recent inquiry. Please let us know if you have any questions!",
+        "options": {}
+      },
+      "id": "893c5d8a-8d77-4b68-b7eb-8c11fc6dfa53",
+      "name": "Send Follow Up Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        520,
+        460
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "admin@yourdomain.com",
+        "toEmail": "vendor@example.com",
+        "subject": "New Maintenance Ticket Assigned",
+        "html": "Hi Vendor,<br><br>A new ticket has been assigned to you. Please check the portal.",
+        "options": {}
+      },
+      "id": "761a29cd-2f3b-47e2-a0e2-887e5b5df891",
+      "name": "Send Vendor Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2,
+      "position": [
+        520,
+        680
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook - Lead Qualification": {
+      "main": [
+        [
+          {
+            "node": "Send Qualification Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Lead Follow Up": {
+      "main": [
+        [
+          {
+            "node": "Send Follow Up Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Maintenance Ticket": {
+      "main": [
+        [
+          {
+            "node": "Send Vendor Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "pinData": {},
+  "versionId": "f7ab0a72-7a0e-43e6-bfbd-d5afb24b8989",
+  "triggerCount": 0,
+  "tags": []
+}
