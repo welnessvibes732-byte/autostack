@@ -172,30 +172,42 @@ export default function Leases() {
 
       setUploadStatus('processing');
 
-      // Insert row into documents
-      const { error: dbErr } = await supabase.from('documents').insert({
+      // Insert row into documents — capture the returned ID
+      const { data: docData, error: dbErr } = await supabase.from('documents').insert({
         organization_id,
         lease_id: null,
         file_path: filePath,
         file_name: uploadFile.name,
+        file_size_bytes: uploadFile.size,
+        file_type: 'pdf',
         doc_type: 'lease',
         authority_level: 4,
+        is_binding: true,
         index_status: 'pending'
-      });
+      }).select('id').single();
       if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
 
-      // Call n8n webhook
+      const document_id = docData?.id || null;
+
+      // Get public URL for n8n to download the file
+      const { data: urlData } = supabase.storage.from('documents').getPublicUrl(filePath);
+      const public_url = urlData?.publicUrl || null;
+
+      // Call n8n webhook with full metadata
       try {
         await fetch('http://localhost:5678/webhook-test/d093c250-b1dc-4575-a910-4f87312fb238', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
-            event: 'lease_uploaded', 
-            file_path: filePath, 
-            lease_id: null,
+            event:           'lease_uploaded',
+            document_id:     document_id,      // ← n8n uses this to update index_status
+            file_path:       filePath,
+            public_url:      public_url,        // ← n8n downloads from here
+            file_name:       uploadFile.name,
+            file_size_bytes: uploadFile.size,
             organization_id: organization_id,
-            tenant_id: uploadTenantId || null,
-            file_name: uploadFile.name
+            tenant_id:       uploadTenantId || null,
+            lease_id:        null,
           })
         });
       } catch(webhookErr) {
