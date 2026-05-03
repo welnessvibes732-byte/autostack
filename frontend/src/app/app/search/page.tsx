@@ -2,7 +2,8 @@
 import { useState, useRef } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Search, Sparkles, FileText, Database, Loader2 } from "lucide-react"
+import { Search, Sparkles, FileText, Database, Loader2, ChevronDown } from "lucide-react"
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
@@ -13,13 +14,22 @@ const SUGGESTIONS = [
   "List all overdue rent payments",
 ]
 
+const SCOPE_OPTIONS = [
+  { value: "all",        label: "All",        emoji: "🔍" },
+  { value: "leases",     label: "Leases",     emoji: "📄" },
+  { value: "properties", label: "Properties", emoji: "🏢" },
+  { value: "tenants",    label: "Tenants",    emoji: "👤" },
+]
+
 export default function AISearch() {
-  const ref     = useRef<HTMLDivElement>(null)
+  const ref      = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
-  const [query, setQuery] = useState("")
-  const [answered, setAnswered] = useState(false)
+  const [query,      setQuery]      = useState("")
+  const [answered,   setAnswered]   = useState(false)
   const [aiResponse, setAiResponse] = useState("")
-  const [isSearching, setIsSearching] = useState(false)
+  const [isSearching,setIsSearching]= useState(false)
+  const [scope,      setScope]      = useState("all")
+  const [dropOpen,   setDropOpen]   = useState(false)
 
   useGSAP(() => {
     gsap.timeline({ defaults: { ease: "power3.out" } })
@@ -29,20 +39,29 @@ export default function AISearch() {
       .fromTo(".search-result", { opacity: 0, y: 16  }, { opacity: 1, y: 0, duration: 0.4 }, "-=0.05")
   }, { scope: ref })
 
+  const selectedScope = SCOPE_OPTIONS.find(o => o.value === scope)!
+
   const handleSearch = async (q = query) => {
     if (!q.trim() || isSearching) return
     setQuery(q)
     setIsSearching(true)
-    
+    setDropOpen(false)
+
     gsap.to(".search-result", { opacity: 0, y: 8, duration: 0.2 })
-    
+
     try {
+      const organization_id = await getOrCreateOrg()
+
       const res = await fetch("http://localhost:5678/webhook-test/propiq-lease-query", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: q })
+        body: JSON.stringify({
+          query:           q,
+          scope:           scope,        // "all" | "leases" | "properties" | "tenants"
+          organization_id: organization_id,
+        })
       })
-      
+
       let text = ""
       try {
         const json = await res.json()
@@ -50,7 +69,7 @@ export default function AISearch() {
       } catch (e) {
         text = await res.text()
       }
-      
+
       setAiResponse(text)
       setAnswered(true)
     } catch (error: any) {
@@ -71,24 +90,80 @@ export default function AISearch() {
           <Sparkles size={22} color="#fff" />
         </div>
         <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "28px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: "0 0 6px" }}>AI Portfolio Search</h1>
-        <p style={{ color: "var(--text-2)", fontSize: "14px" }}>Query your entire portfolio, documents, leases & ops data in plain English.</p>
+        <p style={{ color: "var(--text-2)", fontSize: "14px" }}>Query your entire portfolio, documents, leases &amp; ops data in plain English.</p>
       </header>
 
       {/* Search box */}
-      <div className="search-box" style={{ padding: "24px", borderRadius: "18px", background: "var(--surface)", border: "1px solid var(--border)", position: "relative", overflow: "hidden" }}>
+      <div className="search-box" style={{ padding: "24px", borderRadius: "18px", background: "var(--surface)", border: "1px solid var(--border)", position: "relative", overflow: "visible" }}>
         <div style={{ position: "absolute", top: 0, left: "5%", right: "5%", height: "1px", background: "linear-gradient(90deg,transparent,rgba(59,130,246,0.4),transparent)" }} />
+
+        {/* Row: scope dropdown + input + button */}
         <div style={{ display: "flex", gap: "10px" }}>
+
+          {/* Scope dropdown */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <button
+              onClick={() => setDropOpen(p => !p)}
+              style={{
+                height: "48px", padding: "0 14px", borderRadius: "12px",
+                border: "1px solid #1E1E1E", background: "rgba(0,0,0,0.35)",
+                color: "#fff", fontSize: "13px", fontWeight: 600,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: "6px",
+                fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap",
+                transition: "border-color 0.2s, box-shadow 0.2s",
+                outline: "none",
+                boxShadow: dropOpen ? "0 0 0 3px rgba(59,130,246,0.15)" : "none",
+                borderColor: dropOpen ? "rgba(59,130,246,0.5)" : "#1E1E1E",
+              }}
+            >
+              <span>{selectedScope.emoji}</span>
+              <span>{selectedScope.label}</span>
+              <ChevronDown size={13} style={{ transition: "transform 0.2s", transform: dropOpen ? "rotate(180deg)" : "rotate(0deg)" }} />
+            </button>
+
+            {dropOpen && (
+              <div style={{
+                position: "absolute", top: "calc(100% + 6px)", left: 0,
+                background: "#111", border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: "12px", overflow: "hidden", zIndex: 50,
+                boxShadow: "0 8px 32px rgba(0,0,0,0.6)", minWidth: "140px",
+              }}>
+                {SCOPE_OPTIONS.map(opt => (
+                  <button key={opt.value} onClick={() => { setScope(opt.value); setDropOpen(false) }}
+                    style={{
+                      width: "100%", padding: "10px 14px", background: opt.value === scope ? "rgba(59,130,246,0.12)" : "transparent",
+                      border: "none", color: opt.value === scope ? "#93c5fd" : "var(--text-2)",
+                      fontSize: "13px", fontWeight: opt.value === scope ? 600 : 400,
+                      textAlign: "left", cursor: "pointer", display: "flex", alignItems: "center",
+                      gap: "8px", fontFamily: "'DM Sans',sans-serif",
+                      transition: "background 0.15s",
+                    }}
+                    onMouseEnter={e => { if (opt.value !== scope) e.currentTarget.style.background = "rgba(255,255,255,0.05)" }}
+                    onMouseLeave={e => { if (opt.value !== scope) e.currentTarget.style.background = "transparent" }}
+                  >
+                    <span>{opt.emoji}</span>
+                    <span>{opt.label}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Text input */}
           <div style={{ position: "relative", flex: 1 }}>
             <Search size={16} color="var(--text-3)" style={{ position: "absolute", left: "14px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
             <input ref={inputRef} type="text" value={query} onChange={e => setQuery(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleSearch()}
-              placeholder="Ask anything about your portfolio…"
-              style={{ display: "block", width: "100%", height: "48px", borderRadius: "12px", border: "1px solid #1E1E1E", background: "rgba(0,0,0,0.3)", padding: "0 14px 0 40px", fontSize: "14px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s, box-shadow 0.2s" }}
+              placeholder={`Ask anything about ${selectedScope.label === "All" ? "your portfolio" : selectedScope.label.toLowerCase()}…`}
+              style={{ display: "block", width: "100%", height: "48px", borderRadius: "12px", border: "1px solid #1E1E1E", background: "rgba(0,0,0,0.3)", padding: "0 14px 0 40px", fontSize: "14px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s, box-shadow 0.2s", boxSizing: "border-box" }}
               onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
-              onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
+              onBlur={e  => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
             />
           </div>
-          <button onClick={() => handleSearch()} disabled={isSearching} style={{ padding: "0 24px", borderRadius: "12px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: isSearching ? "not-allowed" : "pointer", opacity: isSearching ? 0.7 : 1, boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", minWidth: "100px" }}
+
+          {/* Search button */}
+          <button onClick={() => handleSearch()} disabled={isSearching}
+            style={{ padding: "0 24px", borderRadius: "12px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "14px", fontWeight: 600, cursor: isSearching ? "not-allowed" : "pointer", opacity: isSearching ? 0.7 : 1, boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s", display: "flex", alignItems: "center", justifyContent: "center", minWidth: "100px" }}
             onMouseEnter={e => !isSearching && gsap.to(e.currentTarget, { scale: 1.04, y: -1, duration: 0.2 })}
             onMouseLeave={e => !isSearching && gsap.to(e.currentTarget, { scale: 1,    y: 0,  duration: 0.3, ease: "back.out(1.5)" })}
           >
@@ -96,6 +171,7 @@ export default function AISearch() {
           </button>
         </div>
 
+        {/* Suggestions */}
         <div style={{ marginTop: "16px", display: "flex", flexWrap: "wrap", gap: "8px", alignItems: "center" }}>
           <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: 500, letterSpacing: "0.04em" }}>TRY:</span>
           {SUGGESTIONS.map(s => (
@@ -113,6 +189,11 @@ export default function AISearch() {
         <div style={{ padding: "16px 20px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: "8px" }}>
           <div style={{ width: "6px", height: "6px", borderRadius: "50%", background: answered ? "#10b981" : "var(--surface-3)", boxShadow: answered ? "0 0 8px #10b981" : "none", transition: "all 0.3s" }} />
           <span style={{ fontSize: "13px", fontWeight: 600, color: "#fff", fontFamily: "'Sora',sans-serif" }}>Results</span>
+          {answered && (
+            <span style={{ marginLeft: "auto", fontSize: "11px", color: "var(--text-3)", background: "rgba(255,255,255,0.05)", padding: "2px 8px", borderRadius: "99px", border: "1px solid var(--border)" }}>
+              {selectedScope.emoji} {selectedScope.label}
+            </span>
+          )}
         </div>
         <div style={{ padding: "24px", display: "flex", alignItems: "center", justifyContent: "center", minHeight: "180px" }}>
           {!answered ? (
@@ -148,6 +229,7 @@ export default function AISearch() {
           )}
         </div>
       </div>
+
       <style dangerouslySetInnerHTML={{__html: `
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
