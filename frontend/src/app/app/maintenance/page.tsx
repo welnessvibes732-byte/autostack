@@ -14,7 +14,7 @@ export default function Maintenance() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ issue: "", priority: "medium", unit_id: "" })
+  const [form, setForm] = useState({ issue: "", priority: "medium", unit_id: "", category: "General" })
   const [unitsList, setUnitsList] = useState<any[]>([])
   const [uploadPhoto, setUploadPhoto] = useState<File | null>(null)
 
@@ -67,31 +67,38 @@ export default function Maintenance() {
         unit_id: form.unit_id || null,
         title: form.issue.substring(0, 50),
         description: form.issue,
+        category: form.category,
         priority: form.priority,
         status: "open",
         photos: photoPaths
       }).select('id').single()
       if (error) throw error
 
-      // Attempt Auto-Assignment
+      // Trigger Broadcast to Vendors
       if (newTicket) {
         try {
-          const res = await fetch('/api/maintenance/auto-assign', {
+          const { data: { session } } = await supabase.auth.getSession();
+          const res = await fetch('/api/maintenance/broadcast', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${session?.access_token}`
+            },
             body: JSON.stringify({ ticket_id: newTicket.id })
           });
           const resData = await res.json();
           if (resData.success) {
-            alert(`Auto-assigned to: ${resData.vendor.name}`);
+            alert(`Broadcast sent to ${resData.notifiedCount} vendors in the ${form.category} category.`);
+          } else {
+            console.error("Broadcast failed:", resData.error);
           }
-        } catch (assignErr) {
-          console.error("Auto-assign failed", assignErr);
+        } catch (broadcastErr) {
+          console.error("Broadcast failed", broadcastErr);
         }
       }
 
       setShowModal(false)
-      setForm({ issue: "", priority: "medium", unit_id: "" })
+      setForm({ issue: "", priority: "medium", unit_id: "", category: "General" })
       setUploadPhoto(null)
       fetchTickets()
     } catch (err: any) {
@@ -255,6 +262,17 @@ export default function Maintenance() {
                 </select>
               </div>
               <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Category</label>
+                <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer", marginBottom: "20px" }}>
+                  <option value="Plumbing">Plumbing</option>
+                  <option value="Electrical">Electrical</option>
+                  <option value="HVAC">HVAC</option>
+                  <option value="Carpentry">Carpentry</option>
+                  <option value="Cleaning">Cleaning</option>
+                  <option value="General">General</option>
+                </select>
+              </div>
+              <div>
                 <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Issue Description</label>
                 <textarea value={form.issue} onChange={e => setForm({...form, issue: e.target.value})} placeholder="e.g. Leaking pipe in bathroom..." rows={3} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", resize: "none", fontFamily: "'DM Sans',sans-serif" }} />
               </div>
@@ -305,7 +323,15 @@ export default function Maintenance() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Category</label>
-                  <input type="text" value={vendorForm.category} onChange={e => setVendorForm({...vendorForm, category: e.target.value})} placeholder="e.g. Plumbing" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <select value={vendorForm.category} onChange={e => setVendorForm({...vendorForm, category: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
+                    <option value="">Select Category</option>
+                    <option value="Plumbing">Plumbing</option>
+                    <option value="Electrical">Electrical</option>
+                    <option value="HVAC">HVAC</option>
+                    <option value="Carpentry">Carpentry</option>
+                    <option value="Cleaning">Cleaning</option>
+                    <option value="General">General</option>
+                  </select>
                 </div>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone</label>

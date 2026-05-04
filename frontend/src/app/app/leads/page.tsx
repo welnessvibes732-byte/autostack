@@ -98,13 +98,6 @@ export default function Leads() {
       }).select('*').single()
       if (error) throw error
 
-      try {
-        await fetch('http://localhost:5678/webhook-test/lead-qualification', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ leadId: insertedLead.id, email: insertedLead.email, full_name: insertedLead.full_name })
-        })
-      } catch (err) { console.error("n8n qualification webhook failed", err) }
       setShowModal(false)
       setForm({ full_name: "", email: "", phone: "", stage: "new", budget: "", notes: "" })
       setLoading(true)
@@ -119,25 +112,40 @@ export default function Leads() {
   async function handleDrop(e: any, newStage: string) {
     e.preventDefault()
     if (!draggedCard) return
+    
+    // Optimistically update UI
+    setDraggedCard(null)
+    
     try {
-      const { error } = await supabase.from('leads').update({ stage: newStage }).eq('id', draggedCard)
-      if (error) throw error
+      const { data: { session } } = await supabase.auth.getSession();
+      const res = await fetch('/api/leads/stage', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session?.access_token}`
+        },
+        body: JSON.stringify({ lead_id: draggedCard, new_stage: newStage })
+      });
+      
+      const data = await res.json();
+      if (!data.success) {
+        throw new Error(data.error || "Failed to update stage");
+      }
+      
       fetchLeadsData()
     } catch (err: any) { alert(err.message) }
-    setDraggedCard(null)
   }
 
   async function handleFollowUp(leadId: string, email: string) {
     if (!email) { alert("Lead has no email."); return }
     try {
-      const { error } = await supabase.from('leads').update({ last_contact_at: new Date().toISOString() }).eq('id', leadId)
+      const { error } = await supabase.from('leads').update({ 
+        last_contact_at: new Date().toISOString(),
+        next_follow_up_at: new Date().toISOString()
+      }).eq('id', leadId)
+      
       if (error) throw error
-      await fetch('http://localhost:5678/webhook-test/lead-follow-up', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ leadId, email })
-      })
-      alert("Follow-up email triggered via n8n!")
+      alert("Follow-up scheduled! The n8n sequence will pick this up automatically.")
       fetchLeadsData()
     } catch (err: any) { alert(err.message) }
   }
