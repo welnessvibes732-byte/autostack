@@ -84,6 +84,9 @@ export default function Maintenance() {
       if (newTicket) {
         try {
           const { data: { session } } = await supabase.auth.getSession();
+          console.log('[Broadcast] Ticket ID:', newTicket.id);
+          
+          // Step 1: Get the vendor list + payload from our API
           const res = await fetch('/api/maintenance/broadcast', {
             method: 'POST',
             headers: { 
@@ -93,13 +96,31 @@ export default function Maintenance() {
             body: JSON.stringify({ ticket_id: newTicket.id })
           });
           const resData = await res.json();
-          if (resData.success) {
-            alert(`Broadcast sent to ${resData.notifiedCount} vendors in the ${form.category} category.`);
+          console.log('[Broadcast] API Response:', resData);
+          
+          if (resData.success && resData.notifiedCount > 0) {
+            // Step 2: Call n8n directly from the browser (same as leases page)
+            // This works because the browser calls localhost:5678 on the USER's machine
+            try {
+              await fetch('http://localhost:5678/webhook-test/ba9dfdd5-4ef9-4f93-9265-e3492b29482b', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ broadcasts: resData.payload })
+              });
+              alert(`Broadcast sent to ${resData.notifiedCount} vendors in the ${form.category} category.`);
+            } catch (n8nErr) {
+              console.error('[Broadcast] n8n call failed:', n8nErr);
+              alert(`Ticket created! But could not reach n8n. Make sure it's running on localhost:5678`);
+            }
+          } else if (resData.success && resData.notifiedCount === 0) {
+            alert(`Ticket created! No vendors found for category: ${form.category}.`);
           } else {
-            console.error("Broadcast failed:", resData.error);
+            console.error("[Broadcast] Failed:", resData.error);
+            alert(`Ticket created, but broadcast failed: ${resData.error}`);
           }
         } catch (broadcastErr) {
-          console.error("Broadcast failed", broadcastErr);
+          console.error("[Broadcast] Exception:", broadcastErr);
+        }
         }
       }
 
