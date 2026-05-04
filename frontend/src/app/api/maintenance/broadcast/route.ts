@@ -93,21 +93,16 @@ export async function POST(req: Request) {
     });
 
     // 4. Send to n8n webhook
-    // We will use a fallback URL or let it fail gracefully if not defined yet
-    const n8nWebhookUrl = process.env.N8N_MAINTENANCE_WEBHOOK_URL;
+    const n8nWebhookUrl = process.env.N8N_MAINTENANCE_WEBHOOK_URL || 'http://localhost:5678/webhook-test/ba9dfdd5-4ef9-4f93-9265-e3492b29482b';
     
-    if (n8nWebhookUrl) {
-      try {
-        await fetch(n8nWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ broadcasts: payload })
-        });
-      } catch (e) {
-        console.error("Failed to call n8n webhook", e);
-      }
-    } else {
-      console.warn("N8N_MAINTENANCE_WEBHOOK_URL is not defined. Skipping actual email dispatch. Payload:", JSON.stringify(payload, null, 2));
+    try {
+      await fetch(n8nWebhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ broadcasts: payload })
+      });
+    } catch (e) {
+      console.error("Failed to call n8n webhook", e);
     }
 
     return NextResponse.json({ success: true, notifiedCount: vendors.length });
