@@ -82,16 +82,17 @@ export async function GET(req: Request) {
     }
 
     // Prepare details HTML for the success screen
-    const propName = ticket.unit?.property?.name || 'Unknown Property';
-    const address1 = ticket.unit?.property?.address_line1 || '';
-    const address2 = ticket.unit?.property?.address_line2 || '';
-    const city = ticket.unit?.property?.city || '';
-    const pincode = ticket.unit?.property?.pincode || '';
+    const t = ticket as any;
+    const propName = t.unit?.property?.name || 'Unknown Property';
+    const address1 = t.unit?.property?.address_line1 || '';
+    const address2 = t.unit?.property?.address_line2 || '';
+    const city = t.unit?.property?.city || '';
+    const pincode = t.unit?.property?.pincode || '';
     const fullAddress = [address1, address2, city, pincode].filter(Boolean).join(', ');
     
-    const unitNumber = ticket.unit?.unit_number ? `Unit: ${ticket.unit.unit_number}` : '';
-    const tenantName = ticket.tenant?.full_name ? `Tenant: ${ticket.tenant.full_name}` : '';
-    const tenantPhone = ticket.tenant?.phone ? `Phone: ${ticket.tenant.phone}` : '';
+    const unitNumber = t.unit?.unit_number ? `Unit: ${t.unit.unit_number}` : '';
+    const tenantName = t.tenant?.full_name ? `Tenant: ${t.tenant.full_name}` : '';
+    const tenantPhone = t.tenant?.phone ? `Phone: ${t.tenant.phone}` : '';
 
     const detailsHtml = `
       <div style="text-align: left; background: #111; padding: 20px; border-radius: 12px; margin-top: 25px; border: 1px solid #222;">
