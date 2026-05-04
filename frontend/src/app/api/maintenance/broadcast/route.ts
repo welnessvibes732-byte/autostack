@@ -37,7 +37,7 @@ export async function POST(req: Request) {
     // 1. Fetch ticket details to get category and organization_id
     const { data: ticket, error: ticketErr } = await supabase
       .from('maintenance_tickets')
-      .select('*, property:properties(name, address_line1), unit:units(unit_number, property:properties(name))')
+      .select('*, property:properties(name, address_line1), unit:units(unit_number, property:properties(name, address_line1)), tenant:tenants(full_name, phone)')
       .eq('id', ticket_id)
       .single();
 
@@ -71,6 +71,9 @@ export async function POST(req: Request) {
     const payload = vendors.map(vendor => {
       // Handle property name (it could be direct on ticket if property_id was set, or via unit_id)
       const propName = ticket.property?.name || ticket.unit?.property?.name || 'Unknown Property';
+      const propAddress = ticket.property?.address_line1 || ticket.unit?.property?.address_line1 || 'Unknown Address';
+      const tenantName = ticket.tenant?.full_name || 'Not specified';
+      const tenantPhone = ticket.tenant?.phone || 'Not specified';
       
       return {
         vendor_id: vendor.id,
@@ -80,7 +83,10 @@ export async function POST(req: Request) {
         ticket_title: ticket.title,
         ticket_description: ticket.description,
         property_name: propName,
+        property_address: propAddress,
         unit_number: ticket.unit?.unit_number || 'Common Area',
+        tenant_name: tenantName,
+        tenant_phone: tenantPhone,
         priority: ticket.priority,
         accept_link: `${baseUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendor.id}`
       };
