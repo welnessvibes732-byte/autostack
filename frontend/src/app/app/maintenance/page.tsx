@@ -14,14 +14,15 @@ export default function Maintenance() {
   const [loading, setLoading] = useState(true)
   const [showModal, setShowModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ issue: "", priority: "medium", unit_id: "", category: "General" })
+  const [form, setForm] = useState({ issue: "", priority: "medium", unit_id: "", tenant_id: "", category: "General" })
   const [unitsList, setUnitsList] = useState<any[]>([])
+  const [tenantsList, setTenantsList] = useState<any[]>([])
   const [uploadPhoto, setUploadPhoto] = useState<File | null>(null)
 
   // Vendor Modal States
   const [showVendorModal, setShowVendorModal] = useState(false)
   const [isSubmittingVendor, setIsSubmittingVendor] = useState(false)
-  const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "", pincodes: "" })
+  const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "" })
 
   const PRIORITY_COLOR: Record<string, string> = { high: "#f43f5e", medium: "#f59e0b", low: "#10b981", urgent: "#f43f5e" }
   const STATUS_COLOR:   Record<string, string> = { open: "#f59e0b", in_progress: "#3b82f6", closed: "#10b981", resolved: "#10b981" }
@@ -43,8 +44,12 @@ export default function Maintenance() {
   }
 
   async function openModal() {
-    const { data } = await supabase.from("units").select("id, unit_number, property:properties(name)")
-    if (data) setUnitsList(data)
+    const { data: units } = await supabase.from("units").select("id, unit_number, property:properties(name)")
+    if (units) setUnitsList(units)
+    
+    const { data: tenants } = await supabase.from("tenants").select("id, full_name")
+    if (tenants) setTenantsList(tenants)
+    
     setShowModal(true)
   }
 
@@ -65,6 +70,7 @@ export default function Maintenance() {
       const { data: newTicket, error } = await supabase.from("maintenance_tickets").insert({
         organization_id,
         unit_id: form.unit_id || null,
+        tenant_id: form.tenant_id || null,
         title: form.issue.substring(0, 50),
         description: form.issue,
         category: form.category,
@@ -98,7 +104,7 @@ export default function Maintenance() {
       }
 
       setShowModal(false)
-      setForm({ issue: "", priority: "medium", unit_id: "", category: "General" })
+      setForm({ issue: "", priority: "medium", unit_id: "", tenant_id: "", category: "General" })
       setUploadPhoto(null)
       fetchTickets()
     } catch (err: any) {
@@ -124,12 +130,11 @@ export default function Maintenance() {
         name: vendorForm.name,
         category: vendorForm.category ? [vendorForm.category] : [],
         phone: vendorForm.phone,
-        email: vendorForm.email,
-        service_pincodes: vendorForm.pincodes ? vendorForm.pincodes.split(',').map(s => s.trim()) : []
+        email: vendorForm.email
       })
       if (error) throw error
       setShowVendorModal(false)
-      setVendorForm({ name: "", category: "", phone: "", email: "", pincodes: "" })
+      setVendorForm({ name: "", category: "", phone: "", email: "" })
     } catch (err: any) {
       alert("Error: " + err.message)
     } finally { setIsSubmittingVendor(false) }
@@ -262,6 +267,13 @@ export default function Maintenance() {
                 </select>
               </div>
               <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Tenant (optional)</label>
+                <select value={form.tenant_id} onChange={e => setForm({...form, tenant_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer" }}>
+                  <option value="">No Tenant</option>
+                  {tenantsList.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
+                </select>
+              </div>
+              <div>
                 <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Category</label>
                 <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer", marginBottom: "20px" }}>
                   <option value="Plumbing">Plumbing</option>
@@ -338,14 +350,10 @@ export default function Maintenance() {
                   <input type="text" value={vendorForm.phone} onChange={e => setVendorForm({...vendorForm, phone: e.target.value})} placeholder="+91..." style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
                 </div>
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</label>
                   <input type="email" value={vendorForm.email} onChange={e => setVendorForm({...vendorForm, email: e.target.value})} placeholder="contact@sparkfix.com" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Service Pincodes</label>
-                  <input type="text" value={vendorForm.pincodes} onChange={e => setVendorForm({...vendorForm, pincodes: e.target.value})} placeholder="110001, 110002" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
                 </div>
               </div>
             </div>
