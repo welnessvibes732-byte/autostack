@@ -21,7 +21,7 @@ export default function Maintenance() {
   // Vendor Modal States
   const [showVendorModal, setShowVendorModal] = useState(false)
   const [isSubmittingVendor, setIsSubmittingVendor] = useState(false)
-  const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "" })
+  const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "", pincodes: "" })
 
   const PRIORITY_COLOR: Record<string, string> = { high: "#f43f5e", medium: "#f59e0b", low: "#10b981", urgent: "#f43f5e" }
   const STATUS_COLOR:   Record<string, string> = { open: "#f59e0b", in_progress: "#3b82f6", closed: "#10b981", resolved: "#10b981" }
@@ -34,7 +34,7 @@ export default function Maintenance() {
     try {
       const { data, error } = await supabase
         .from("maintenance_tickets")
-        .select("*, unit:units(unit_number, property:properties(name))")
+        .select("*, unit:units(unit_number, property:properties(name)), vendor:vendors(name)")
         .order("created_at", { ascending: false })
       if (error) throw error
       setTickets(data || [])
@@ -62,7 +62,7 @@ export default function Maintenance() {
         photoPaths.push(filePath)
       }
 
-      const { error } = await supabase.from("maintenance_tickets").insert({
+      const { data: newTicket, error } = await supabase.from("maintenance_tickets").insert({
         organization_id,
         unit_id: form.unit_id || null,
         title: form.issue.substring(0, 50),
@@ -70,8 +70,26 @@ export default function Maintenance() {
         priority: form.priority,
         status: "open",
         photos: photoPaths
-      })
+      }).select('id').single()
       if (error) throw error
+
+      // Attempt Auto-Assignment
+      if (newTicket) {
+        try {
+          const res = await fetch('/api/maintenance/auto-assign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ticket_id: newTicket.id })
+          });
+          const resData = await res.json();
+          if (resData.success) {
+            alert(`Auto-assigned to: ${resData.vendor.name}`);
+          }
+        } catch (assignErr) {
+          console.error("Auto-assign failed", assignErr);
+        }
+      }
+
       setShowModal(false)
       setForm({ issue: "", priority: "medium", unit_id: "" })
       setUploadPhoto(null)
@@ -99,11 +117,12 @@ export default function Maintenance() {
         name: vendorForm.name,
         category: vendorForm.category ? [vendorForm.category] : [],
         phone: vendorForm.phone,
-        email: vendorForm.email
+        email: vendorForm.email,
+        service_pincodes: vendorForm.pincodes ? vendorForm.pincodes.split(',').map(s => s.trim()) : []
       })
       if (error) throw error
       setShowVendorModal(false)
-      setVendorForm({ name: "", category: "", phone: "", email: "" })
+      setVendorForm({ name: "", category: "", phone: "", email: "", pincodes: "" })
     } catch (err: any) {
       alert("Error: " + err.message)
     } finally { setIsSubmittingVendor(false) }
@@ -172,7 +191,7 @@ export default function Maintenance() {
         <table style={{ width: "100%", borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border)" }}>
-              {["Unit","Issue","Priority","Status","Date",""].map(h => (
+              {["Unit","Issue","Priority","Status","Vendor","Date",""].map(h => (
                 <th key={h} style={{ padding: "12px 18px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.06em", fontFamily: "'DM Mono',monospace", textTransform: "uppercase" }}>{h}</th>
               ))}
             </tr>
@@ -200,6 +219,7 @@ export default function Maintenance() {
                   <td style={{ padding: "14px 18px", fontSize: "13px", color: "var(--text-2)", maxWidth: "200px" }}>{t.issue_description}</td>
                   <td style={{ padding: "14px 18px" }}><span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${pColor}15`, color: pColor, border: `1px solid ${pColor}30`, textTransform: "capitalize" }}>{t.priority}</span></td>
                   <td style={{ padding: "14px 18px" }}><span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${sColor}15`, color: sColor, border: `1px solid ${sColor}30`, textTransform: "capitalize" }}>{t.status?.replace("_"," ")}</span></td>
+                  <td style={{ padding: "14px 18px", fontSize: "13px", color: t.vendor?.name ? "#e2e8f0" : "var(--text-3)", fontWeight: t.vendor?.name ? 500 : 400 }}>{t.vendor?.name || 'Unassigned'}</td>
                   <td style={{ padding: "14px 18px", fontSize: "12px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{date}</td>
                   <td style={{ padding: "14px 18px", textAlign: "right" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px" }}>
@@ -292,9 +312,15 @@ export default function Maintenance() {
                   <input type="text" value={vendorForm.phone} onChange={e => setVendorForm({...vendorForm, phone: e.target.value})} placeholder="+91..." style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
                 </div>
               </div>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</label>
-                <input type="email" value={vendorForm.email} onChange={e => setVendorForm({...vendorForm, email: e.target.value})} placeholder="contact@sparkfix.com" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</label>
+                  <input type="email" value={vendorForm.email} onChange={e => setVendorForm({...vendorForm, email: e.target.value})} placeholder="contact@sparkfix.com" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Service Pincodes</label>
+                  <input type="text" value={vendorForm.pincodes} onChange={e => setVendorForm({...vendorForm, pincodes: e.target.value})} placeholder="110001, 110002" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
               </div>
             </div>
             <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>

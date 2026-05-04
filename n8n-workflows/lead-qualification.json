@@ -1,0 +1,54 @@
+{
+  "name": "Lead Qualification Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-qualification",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "9ad609d5-78eb-44c8-b529-67990be8867a",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "lead-qualification"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "subject": "Thank you for your interest! Let's get started.",
+        "message": "={{ 'Hi ' + $json.body.full_name + ',\\n\\nThank you for reaching out! To help us find the perfect match for you, could you please let us know your requirements?\\n\\n- When are you looking to move?\\n- How many bedrooms do you need?\\n- Do you have any pets?\\n\\nBest regards,\\nThe Property Team' }}",
+        "toList": [
+          "={{ $json.body.email }}"
+        ]
+      },
+      "id": "f5c225b6-7eb8-4223-bd4f-0599bb09f584",
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        460,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

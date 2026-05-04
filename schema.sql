@@ -250,6 +250,7 @@ CREATE TABLE vendors (
   email           TEXT,
   whatsapp_number TEXT,
   address         TEXT,
+  service_pincodes TEXT[],
   gstin           TEXT,
   bank_account    TEXT,
   bank_ifsc       TEXT,

@@ -65,7 +65,8 @@ export default function Leads() {
           time,
           initials,
           bg: col.color,
-          email: l.email
+          email: l.email,
+          last_contact_at: l.last_contact_at
         });
       });
       
@@ -219,7 +220,14 @@ export default function Leads() {
                   </div>
                   <p style={{ fontSize: "12px", color: "var(--text-2)", margin: "0 0 10px", lineHeight: 1.4 }}>{card.note}</p>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "1px solid var(--border)" }}>
-                    <span style={{ fontSize: "11px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{card.time}</span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                      <span style={{ fontSize: "11px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{card.time}</span>
+                      {card.last_contact_at && (
+                        <span style={{ fontSize: "9px", color: "#f97316", fontWeight: 500 }}>
+                          Last: {new Date(card.last_contact_at).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
                     <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
                       <button onClick={() => handleFollowUp(card.id, card.email)} style={{ padding: "4px 8px", borderRadius: "6px", background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.2)", color: "#f97316", display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", fontSize: "10px", fontWeight: 600, marginRight: "4px" }}>
                         <Send size={10} /> Follow-up

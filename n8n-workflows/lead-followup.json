@@ -1,0 +1,54 @@
+{
+  "name": "Lead Follow-Up Email",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-follow-up",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "eab03bf4-f25f-40c2-9023-5e82488820c7",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "webhookId": "lead-follow-up"
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "subject": "Checking in regarding your property search",
+        "message": "={{ 'Hi,\\n\\nWe wanted to follow up and see if you are still looking for a property. Let us know if you would like to schedule any viewings.\\n\\nBest regards,\\nThe Property Team' }}",
+        "toList": [
+          "={{ $json.body.email }}"
+        ]
+      },
+      "id": "996cd93a-86c0-432d-9658-0eb87cc9f54f",
+      "name": "Gmail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        460,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Gmail",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}
