@@ -29,6 +29,18 @@ export default function Maintenance() {
 
   useEffect(() => {
     fetchTickets()
+
+    // Realtime subscription — stats update live when vendor accepts, status changes, etc.
+    const channel = supabase
+      .channel('maintenance_tickets_realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'maintenance_tickets' },
+        () => { fetchTickets() }
+      )
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
   }, [])
 
   async function fetchTickets() {
