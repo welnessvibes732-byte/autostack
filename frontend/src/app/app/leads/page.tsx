@@ -98,6 +98,31 @@ export default function Leads() {
       }).select('*').single()
       if (error) throw error
 
+      // W1: Trigger qualification email via n8n (client-side, same as maintenance)
+      if (insertedLead && form.email) {
+        try {
+          const replySubject = `[Lead-${insertedLead.id.substring(0, 8)}] Property Inquiry Questions`
+          await fetch('http://localhost:5678/webhook-test/lead-qualification', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              lead_id:                 insertedLead.id,
+              full_name:               form.full_name,
+              email:                   form.email,
+              phone:                   form.phone,
+              budget_max:              form.budget || null,
+              notes:                   form.notes,
+              organization_id:         organization_id,
+              qualification_questions: questions || "1. When are you looking to move?\n2. How many bedrooms do you need?\n3. Do you have pets?\n4. What is your monthly budget?",
+              reply_subject:           replySubject
+            })
+          })
+          console.log('[W1] Qualification email triggered for:', form.email)
+        } catch (w1Err) {
+          console.error('[W1] n8n webhook failed:', w1Err)
+        }
+      }
+
       setShowModal(false)
       setForm({ full_name: "", email: "", phone: "", stage: "new", budget: "", notes: "" })
       setLoading(true)
@@ -108,6 +133,7 @@ export default function Leads() {
       setIsSubmitting(false)
     }
   }
+
 
   async function handleDrop(e: any, newStage: string) {
     e.preventDefault()

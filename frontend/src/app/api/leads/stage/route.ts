@@ -30,13 +30,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'lead_id and new_stage are required' }, { status: 400 });
     }
 
-    // 1. Fetch user to get user_id and organization_id (for audit logging purposes in n8n)
-    const { data: { user }, error: userErr } = await supabase.auth.getUser();
-    
-    // We get the organization_id from the lead itself (RLS ensures they can only fetch their own org's lead)
+    // 1. Fetch current user for audit trail
+    const { data: { user } } = await supabase.auth.getUser();
+
+    // 2. Always update the stage in DB first
     const { data: lead, error: leadErr } = await supabase
       .from('leads')
-      .select('organization_id')
+      .select('organization_id, email, full_name')
       .eq('id', lead_id)
       .single();
 
@@ -44,39 +44,31 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: 'Lead not found or access denied' }, { status: 404 });
     }
 
-    // 2. Forward payload to n8n Webhook for W3
+    const { error: updateErr } = await supabase
+      .from('leads')
+      .update({ stage: new_stage })
+      .eq('id', lead_id);
+
+    if (updateErr) throw updateErr;
+
+    // 3. Forward to n8n W3 webhook (only for "closed" stage — Closed Won email)
     const n8nWebhookUrl = process.env.N8N_LEAD_STAGE_WEBHOOK_URL;
-    
-    if (n8nWebhookUrl) {
+    if (n8nWebhookUrl && new_stage === 'closed') {
       try {
-        const response = await fetch(n8nWebhookUrl, {
+        await fetch(n8nWebhookUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            lead_id: lead_id,
+            lead_id,
             stage: new_stage,
+            email: lead.email,
+            full_name: lead.full_name,
             user_id: user?.id || 'system',
             organization_id: lead.organization_id
           })
         });
-
-        if (!response.ok) {
-          console.error("n8n webhook responded with status:", response.status);
-        }
       } catch (e) {
-        console.error("Failed to call n8n webhook", e);
-        // Fallback: If n8n webhook fails or isn't reachable, just update the DB directly so the UI doesn't break
-        await supabase.from('leads').update({ stage: new_stage }).eq('id', lead_id);
-      }
-    } else {
-      console.warn("N8N_LEAD_STAGE_WEBHOOK_URL is not defined. Updating database directly.");
-      const { error: updateErr } = await supabase
-        .from('leads')
-        .update({ stage: new_stage })
-        .eq('id', lead_id);
-        
-      if (updateErr) {
-        throw updateErr;
+        console.error("Failed to call n8n W3 webhook", e);
       }
     }
 
