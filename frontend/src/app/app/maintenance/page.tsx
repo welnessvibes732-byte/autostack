@@ -102,7 +102,7 @@ export default function Maintenance() {
             // Step 2: Call n8n directly from the browser (same as leases page)
             // This works because the browser calls localhost:5678 on the USER's machine
             try {
-              const n8nRes = await fetch('http://localhost:5678/webhook-test/ba9dfdd5-4ef9-4f93-9265-e3492b29482b', {
+              const n8nRes = await fetch('http://localhost:5678/webhook-test/600760a8-b26c-4e95-b0aa-4ecf5375cba3', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ broadcasts: resData.payload })
