@@ -9,22 +9,28 @@ const supabase = createClient(
 
 export async function POST(req: Request) {
   try {
-    const { lead_id } = await req.json();
+    const { lead_id, email } = await req.json();
 
-    if (!lead_id) {
-      return NextResponse.json({ error: 'lead_id is required' }, { status: 400 });
+    if (!lead_id && !email) {
+      return NextResponse.json({ error: 'lead_id or email is required' }, { status: 400 });
     }
 
-    // Update last_contact_at and mark that auto qualification email was sent
-    const { error } = await supabase
+    let query = supabase
       .from('leads')
       .update({
-        last_contact_at:    new Date().toISOString(),
-        auto_responded:     true,
-        auto_responded_at:  new Date().toISOString(),
-      })
-      .eq('id', lead_id);
+        last_contact_at:   new Date().toISOString(),
+        auto_responded:    true,
+        auto_responded_at: new Date().toISOString(),
+      });
 
+    // Accept either lead_id or email
+    if (lead_id) {
+      query = query.eq('id', lead_id);
+    } else {
+      query = query.eq('email', email);
+    }
+
+    const { error } = await query;
     if (error) throw error;
 
     return NextResponse.json({ success: true, message: 'Contact updated' });

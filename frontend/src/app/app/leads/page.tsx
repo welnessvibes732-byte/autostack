@@ -102,7 +102,7 @@ export default function Leads() {
       if (insertedLead && form.email) {
         try {
           const replySubject = `[Lead-${insertedLead.id.substring(0, 8)}] Property Inquiry Questions`
-          await fetch('http://localhost:5678/webhook-test/lead-qualification', {
+          await fetch('http://localhost:5678/webhook-test/propiq-new-lead', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
