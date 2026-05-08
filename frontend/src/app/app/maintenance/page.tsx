@@ -24,6 +24,10 @@ export default function Maintenance() {
   const [isSubmittingVendor, setIsSubmittingVendor] = useState(false)
   const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "" })
 
+  // Complete Ticket Modal States
+  const [completeModalTicketId, setCompleteModalTicketId] = useState<string | null>(null)
+  const [completeForm, setCompleteForm] = useState({ actual_cost: "", tenant_rating: 5, resolution_notes: "" })
+
   const PRIORITY_COLOR: Record<string, string> = { high: "#f43f5e", medium: "#f59e0b", low: "#10b981", urgent: "#f43f5e" }
   const STATUS_COLOR:   Record<string, string> = { open: "#f59e0b", in_progress: "#3b82f6", closed: "#10b981", resolved: "#10b981" }
 
@@ -145,12 +149,27 @@ export default function Maintenance() {
     } finally { setIsSubmitting(false) }
   }
 
-  async function completeTicket(id: string) {
+  function openCompleteModal(id: string) {
+    setCompleteModalTicketId(id)
+    setCompleteForm({ actual_cost: "", tenant_rating: 5, resolution_notes: "" })
+  }
+
+  async function submitCompleteTicket() {
+    if (!completeModalTicketId) return
+    setIsSubmitting(true)
     try {
-      const { error } = await supabase.from("maintenance_tickets").update({ status: "completed" }).eq("id", id)
+      const { error } = await supabase.from("maintenance_tickets").update({ 
+        status: "completed",
+        actual_cost: completeForm.actual_cost ? Number(completeForm.actual_cost) : null,
+        tenant_rating: completeForm.tenant_rating,
+        resolution_notes: completeForm.resolution_notes,
+        completed_at: new Date().toISOString()
+      }).eq("id", completeModalTicketId)
       if (error) throw error
+      setCompleteModalTicketId(null)
       fetchTickets()
     } catch (err: any) { alert("Error completing ticket: " + err.message) }
+    finally { setIsSubmitting(false) }
   }
 
   async function submitVendor() {
@@ -269,7 +288,7 @@ export default function Maintenance() {
                   <td style={{ padding: "14px 18px", textAlign: "right" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px" }}>
                       {["open", "in_progress"].includes(t.status) && (
-                        <button onClick={() => completeTicket(t.id)} style={{ padding: "6px 12px", borderRadius: "6px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#10b981", fontSize: "11px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                        <button onClick={() => openCompleteModal(t.id)} style={{ padding: "6px 12px", borderRadius: "6px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#10b981", fontSize: "11px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
                           <CheckCircle2 size={12} /> Complete
                         </button>
                       )}
@@ -394,6 +413,55 @@ export default function Maintenance() {
               <button onClick={() => setShowVendorModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
               <button onClick={submitVendor} disabled={isSubmittingVendor} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmittingVendor ? "not-allowed" : "pointer", opacity: isSubmittingVendor ? 0.7 : 1 }}>
                 {isSubmittingVendor ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Add Vendor"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Complete Ticket Modal */}
+      {completeModalTicketId && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
+          <div style={{ width: "400px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#10b981", display: "flex", alignItems: "center", gap: "10px" }}><CheckCircle2 size={18} /> Complete Job</h2>
+              <button onClick={() => setCompleteModalTicketId(null)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+            </div>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+              <p style={{ color: "var(--text-2)", fontSize: "13px", margin: 0, lineHeight: 1.5 }}>
+                To finalize this ticket, please enter the final cost and rate the vendor's performance. This data helps our AI score vendors and predict future maintenance costs.
+              </p>
+              
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Actual Cost (₹)</label>
+                <input type="number" value={completeForm.actual_cost} onChange={e => setCompleteForm({...completeForm, actual_cost: e.target.value})} placeholder="e.g. 1500" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vendor Rating (1-5)</label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  {[1, 2, 3, 4, 5].map(rating => (
+                    <button
+                      key={rating}
+                      onClick={() => setCompleteForm({...completeForm, tenant_rating: rating})}
+                      style={{ flex: 1, height: "42px", borderRadius: "8px", border: completeForm.tenant_rating === rating ? "1px solid #10b981" : "1px solid #1E1E1E", background: completeForm.tenant_rating === rating ? "rgba(16,185,129,0.1)" : "#000", color: completeForm.tenant_rating === rating ? "#10b981" : "var(--text-3)", fontWeight: 600, cursor: "pointer" }}
+                    >
+                      {rating}★
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Resolution Notes (Optional)</label>
+                <textarea value={completeForm.resolution_notes} onChange={e => setCompleteForm({...completeForm, resolution_notes: e.target.value})} placeholder="What was fixed?" rows={2} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", resize: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+            </div>
+            
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
+              <button onClick={() => setCompleteModalTicketId(null)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+              <button onClick={submitCompleteTicket} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", color: "#10b981", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
+                {isSubmitting ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Mark Completed"}
               </button>
             </div>
           </div>
