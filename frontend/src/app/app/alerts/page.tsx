@@ -4,6 +4,7 @@ import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
 import { Bell, Settings, X, Check, Loader2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
@@ -22,10 +23,12 @@ export default function Alerts() {
   useEffect(() => {
     async function fetchAlerts() {
       try {
+        const orgId = await getOrCreateOrg()
         const { data, error } = await supabase
           .from("alerts")
           .select("*")
-          .order("created_at", { ascending: false })
+          .eq("organization_id", orgId)
+          .order("sent_at", { ascending: false })
           .limit(50)
         if (error) throw error
         setAlerts(data || [])
@@ -40,12 +43,12 @@ export default function Alerts() {
 
   const dismiss = async (id: string) => {
     setAlerts(a => a.filter(x => x.id !== id))
-    await supabase.from("alerts").update({ status: "dismissed" }).eq("id", id)
+    await supabase.from("alerts").update({ is_read: true }).eq("id", id)
   }
 
   const acknowledge = async (id: string) => {
-    setAlerts(a => a.map(x => x.id === id ? { ...x, status: "acknowledged" } : x))
-    await supabase.from("alerts").update({ status: "acknowledged" }).eq("id", id)
+    setAlerts(a => a.map(x => x.id === id ? { ...x, is_read: true } : x))
+    await supabase.from("alerts").update({ is_read: true }).eq("id", id)
   }
 
   useGSAP(() => {
@@ -94,9 +97,9 @@ export default function Alerts() {
           </div>
         ) : alerts.map((alert) => {
           const sev = SEVERITY_MAP[alert.severity] || SEVERITY_MAP["info"]
-          const timeAgo = new Date(alert.created_at).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
+          const timeAgo = new Date(alert.sent_at || Date.now()).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
           return (
-            <div key={alert.id} className="alert-card" style={{ display: "flex", alignItems: "flex-start", gap: "16px", padding: "18px 20px", borderRadius: "14px", background: sev.bg, border: `1px solid ${sev.border}`, borderLeft: `3px solid ${sev.color}`, transition: "transform 0.2s", cursor: "default", opacity: alert.status === "dismissed" ? 0.4 : 1 }}
+            <div key={alert.id} className="alert-card" style={{ display: "flex", alignItems: "flex-start", gap: "16px", padding: "18px 20px", borderRadius: "14px", background: sev.bg, border: `1px solid ${sev.border}`, borderLeft: `3px solid ${sev.color}`, transition: "transform 0.2s", cursor: "default", opacity: alert.is_read ? 0.4 : 1 }}
               onMouseEnter={e => gsap.to(e.currentTarget, { y: -2, boxShadow: `0 8px 24px rgba(0,0,0,0.3)`, duration: 0.25 })}
               onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", duration: 0.35, ease: "back.out(1.5)" })}
             >

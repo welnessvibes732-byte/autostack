@@ -1,0 +1,56 @@
+{
+  "title": "The Synthetic Identity Crisis",
+  "kicker": "CYBERSECURITY & RISK",
+  "author": "AETHERA",
+  "slides": [
+    {
+      "headline": "Your new tenant doesn't exist.",
+      "body": "Flawless credit. Flawless background. Pristine pay stubs. But they are completely fabricated by AI. Swipe to see how.",
+      "highlight": "doesn't exist",
+      "is_cover": true,
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    },
+    {
+      "headline": "Welcome to the era of Synthetic Identity Fraud.",
+      "body": "Generative AI can now stitch a real stolen SSN to a fake name, synthesize a credit profile, and render fake income docs in 4 seconds.",
+      "highlight": "Synthetic Identity Fraud",
+      "callouts": ["Stitched credit profiles", "AI-rendered income docs", "Dark web 'FraudGPT' engines"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\synthetic_identity_glitch_1779813792334.png"
+    },
+    {
+      "headline": "Traditional software is built to screen humans.",
+      "body": "Your team checks the credit report, celebrates the 'perfect' score, and signs the lease. You are playing checkers; they are playing chess.",
+      "highlight": "screen humans",
+      "callouts": ["Checks simple flat credit data", "Trusts PDFs blindly", "Oblivious agent pops champagne"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\nervous_presenter_icon_1779640552244.png"
+    },
+    {
+      "headline": "Three months later, the rent stops.",
+      "body": "The fake identity vanishes. You spend 6 months in housing court and pay $15,000 in eviction and unit-turn costs. All for a ghost.",
+      "highlight": "rent stops",
+      "callouts": ["$15,000 lost in legal/turns", "6 months of empty space", "Evicting a person who doesn't exist"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\calendar_timeline_icon_1779640587520.png"
+    },
+    {
+      "headline": "Aethera treats leasing as a cybersecurity event.",
+      "body": "We don't trust a PDF of an ID. Aethera cross-references biometric identity graphs with live banking ledgers before a lease is ever generated.",
+      "highlight": "cybersecurity event",
+      "callouts": ["Direct banking ledger sync", "Biometric digital footprints", "AI metadata analysis"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\cybersecurity_shield_lock_1779813828277.png"
+    },
+    {
+      "headline": "The system catches the fraud before you sign.",
+      "body": "If a pay stub's metadata has been manipulated or doesn't match the applicant's digital ledger, the lease creation is blocked automatically.",
+      "highlight": "catches the fraud",
+      "callouts": ["Auto-blocked fake leases", "Instantly flags manipulated PDF", "Saves $15,000 per attempt"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\live_dashboard_icon_1779640570254.png"
+    },
+    {
+      "headline": "Stop fighting 2026 AI fraud with 2018 screening tools.",
+      "body": "Put a cybersecurity shield over your leasing pipeline. Secure your portfolio's yield before the ghost moves in.",
+      "highlight": "cybersecurity shield",
+      "is_cover": false,
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    }
+  ]
+}

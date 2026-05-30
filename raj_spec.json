@@ -1,0 +1,36 @@
+{
+  "title": "The Concession Trap",
+  "kicker": "OPERATIONAL INTELLIGENCE",
+  "author": "NITHESH DEVARLA",
+  "slides": [
+    {
+      "headline": "Why giving \"One Month Free\" destroys your building's value.",
+      "body": "It's the most common reaction to a softening market. It's also the most expensive.",
+      "mark": "circle"
+    },
+    {
+      "headline": "The Panic Move.",
+      "body": "Vacancy ticks up 2%. Your leasing manager panics, looks at the competitor across the street, and copies their special.",
+      "callouts": ["No Data", "Pure Reaction"],
+      "mark": "underline"
+    },
+    {
+      "headline": "The Concession Trap.",
+      "body": "You give away $2,500 to 30 new tenants this year. But half of them were ready to sign for a $500 deposit reduction.",
+      "callouts": ["$75,000 Given Away", "Half of it Unnecessary"],
+      "mark": "arrow"
+    },
+    {
+      "headline": "The Brutal Math.",
+      "body": "$37,500 in NOI completely wasted. At a 5% Cap Rate, that single panic move erased $750,000 from your valuation.",
+      "callouts": ["- $37.5k Cash", "- $750k Value"],
+      "mark": "underline"
+    },
+    {
+      "headline": "Stop guessing.",
+      "body": "Use real-time market intelligence. Know exactly what concessions are needed to close—and not a single dollar more.",
+      "callouts": ["Aethera Intelligence", "Comment 'YIELD' below"],
+      "mark": "circle"
+    }
+  ]
+}

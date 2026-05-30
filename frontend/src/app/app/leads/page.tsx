@@ -1,382 +1,485 @@
 "use client"
-import { useRef, useState, useEffect } from "react"
-import gsap from "gsap"
-import { useGSAP } from "@gsap/react"
-import { Plus, MoreHorizontal, UserPlus, Phone, Mail, X, Loader2, Settings2, Send } from "lucide-react"
+
+import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
+import { Plus, LayoutGrid, List, X, Loader2, CheckCircle2, UserPlus, FileText, Activity, MessageSquare } from "lucide-react"
+import toast from "react-hot-toast"
 
-gsap.registerPlugin(useGSAP)
-
-export default function Leads() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [columns, setColumns] = useState<any[]>([
-    { id: "new",         label: "New Intake",  color: "#3b82f6", cards: [] },
-    { id: "qualified",   label: "Qualified",   color: "#7c3aed", cards: [] },
-    { id: "viewing",     label: "Viewing",     color: "#f59e0b", cards: [] },
-    { id: "negotiating", label: "Negotiating", color: "#f43f5e", cards: [] },
-    { id: "closed",      label: "Closed",      color: "#10b981", cards: [] },
-  ])
+export default function LeadsPage() {
+  const [viewMode, setViewMode] = useState<"kanban" | "list">("kanban")
+  const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
+  const [orgId, setOrgId] = useState("")
+  const [currentUser, setCurrentUser] = useState<any>(null)
+
+  const [selectedLead, setSelectedLead] = useState<any | null>(null)
+  const [sidebarTab, setSidebarTab] = useState("terms")
+  
+  const [dealTerms, setDealTerms] = useState({
+    final_rent: "", deposit_amount: "", move_in_date: "", lease_length: "12", concessions: ""
+  })
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ full_name: "", email: "", phone: "", stage: "new", budget: "", notes: "" })
 
-  const [draggedCard, setDraggedCard] = useState<string | null>(null)
-  const [showSettings, setShowSettings] = useState(false)
-  const [questions, setQuestions] = useState("")
-  const [isSavingSettings, setIsSavingSettings] = useState(false)
+  // Create Lead Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newLead, setNewLead] = useState({
+    full_name: "", email: "", phone: "", inquiry_type: "residential", budget_max: "", preferred_area: ""
+  })
 
-  const fetchLeadsData = async () => {
+  const COLUMNS = [
+    { id: "new", title: "New", color: "bg-blue-500/10 border-blue-500/20 text-blue-400" },
+    { id: "qualified", title: "Qualified", color: "bg-indigo-500/10 border-indigo-500/20 text-indigo-400" },
+    { id: "viewing_scheduled", title: "Viewing", color: "bg-purple-500/10 border-purple-500/20 text-purple-400" },
+    { id: "negotiating", title: "Negotiating", color: "bg-fuchsia-500/10 border-fuchsia-500/20 text-fuchsia-400" },
+    { id: "pending_signoff", title: "Sign-off", color: "bg-pink-500/10 border-pink-500/20 text-pink-400" },
+    { id: "closed_won", title: "Won", color: "bg-green-500/10 border-green-500/20 text-green-400" }
+  ]
+
+  useEffect(() => {
+    init()
+  }, [])
+
+  const init = async () => {
     try {
-      const orgId = await getOrCreateOrg()
-      const { data: orgData } = await supabase.from('organizations').select('lead_settings').eq('id', orgId).single()
-      if (orgData && orgData.lead_settings) {
-        setQuestions(orgData.lead_settings.questions || "")
-      }
-
-      const { data, error } = await supabase.from('leads').select('*')
-      if (error) throw error;
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+      const org = await getOrCreateOrg()
+      setOrgId(org)
       
-      const leads = data || [];
+      await fetchLeads(org)
       
-      const baseCols = [
-        { id: "new",         label: "New Intake",  color: "#3b82f6", cards: [] as any[] },
-        { id: "qualified",   label: "Qualified",   color: "#7c3aed", cards: [] as any[] },
-        { id: "viewing",     label: "Viewing",     color: "#f59e0b", cards: [] as any[] },
-        { id: "negotiating", label: "Negotiating", color: "#f43f5e", cards: [] as any[] },
-        { id: "closed",      label: "Closed",      color: "#10b981", cards: [] as any[] },
-      ]
-
-      leads.forEach(l => {
-        const name = (l.full_name || '').trim() || 'Unknown Lead';
-        const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '??';
-        const stage = (l.stage || 'new').toLowerCase();
-        
-        let col = baseCols.find(c => c.id === stage);
-        if (!col) col = baseCols[0];
-        
-        const time = new Date(l.created_at).toLocaleDateString('en-GB', { month: 'short', day: 'numeric' });
-        
-        col.cards.push({
-          id: l.id,
-          name,
-          note: l.notes || (l.budget_max ? `Budget: ₹${l.budget_max}` : 'No notes provided.'),
-          time,
-          initials,
-          bg: col.color,
-          email: l.email,
-          last_contact_at: l.last_contact_at
-        });
-      });
-      
-      setColumns(baseCols);
-    } catch(e) {
-      console.error(e)
+      const channelId = `leads-page-${Math.random()}`
+      const channel = supabase.channel(channelId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `organization_id=eq.${org}` }, () => fetchLeads(org))
+        .subscribe()
+      return () => { supabase.removeChannel(channel) }
+    } catch (err) {
+      console.error(err)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    fetchLeadsData()
-  }, [])
+  const fetchLeads = async (org: string) => {
+    const { data } = await supabase.from('leads').select('*').eq('organization_id', org).order('created_at', { ascending: false })
+    if (data) setLeads(data)
+  }
 
-  async function submitLead() {
-    if (!form.full_name) { alert("Please enter the lead's full name."); return }
+  const handleCreateLead = async () => {
+    if (!newLead.full_name) return toast.error("Full Name is required")
     setIsSubmitting(true)
     try {
-      const organization_id = await getOrCreateOrg()
-      const { error, data: insertedLead } = await supabase.from('leads').insert({
-        organization_id,
-        full_name: form.full_name,
-        email: form.email,
-        phone: form.phone,
-        stage: form.stage,
-        budget_max: form.budget ? parseFloat(form.budget) : null,
-        notes: form.notes
-      }).select('*').single()
+      const { error } = await supabase.from('leads').insert({
+        organization_id: orgId,
+        full_name: newLead.full_name,
+        email: newLead.email,
+        phone: newLead.phone,
+        inquiry_type: newLead.inquiry_type,
+        budget_max: newLead.budget_max ? Number(newLead.budget_max) : 0,
+        preferred_area: newLead.preferred_area,
+        stage: 'new',
+        lead_score: 50
+      })
       if (error) throw error
+      
+      // Ping our fast Next.js route to send the Gmail alert
+      fetch('/api/webhooks/new-lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLead)
+      }).catch(err => console.error("Email alert failed:", err))
 
-      // W1: Trigger qualification email via n8n (client-side, same as maintenance)
-      if (insertedLead && form.email) {
-        try {
-          const replySubject = `[Lead-${insertedLead.id.substring(0, 8)}] Property Inquiry Questions`
-          await fetch('http://localhost:5678/webhook-test/propiq-new-lead', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              lead_id:                 insertedLead.id,
-              full_name:               form.full_name,
-              email:                   form.email,
-              phone:                   form.phone,
-              budget_max:              form.budget || null,
-              notes:                   form.notes,
-              organization_id:         organization_id,
-              qualification_questions: questions || "1. When are you looking to move?\n2. How many bedrooms do you need?\n3. Do you have pets?\n4. What is your monthly budget?",
-              reply_subject:           replySubject
-            })
-          })
-          console.log('[W1] Qualification email triggered for:', form.email)
-        } catch (w1Err) {
-          console.error('[W1] n8n webhook failed:', w1Err)
-        }
-      }
-
-      setShowModal(false)
-      setForm({ full_name: "", email: "", phone: "", stage: "new", budget: "", notes: "" })
-      setLoading(true)
-      fetchLeadsData()
-    } catch (err: any) {
-      alert("Error: " + err.message)
+      toast.success("Lead created successfully")
+      setShowCreateModal(false)
+      setNewLead({ full_name: "", email: "", phone: "", inquiry_type: "residential", budget_max: "", preferred_area: "" })
+      fetchLeads(orgId)
+    } catch (e: any) {
+      toast.error("Failed to create lead")
     } finally {
       setIsSubmitting(false)
     }
   }
 
+  const handleDragStart = (e: React.DragEvent, id: string) => {
+    e.dataTransfer.setData("lead_id", id)
+  }
 
-  async function handleDrop(e: any, newStage: string) {
+  const handleDragOver = (e: React.DragEvent) => { e.preventDefault() }
+
+  const handleDrop = async (e: React.DragEvent, columnId: string) => {
     e.preventDefault()
-    if (!draggedCard) return
+    const leadId = e.dataTransfer.getData("lead_id")
+    if (!leadId) return
     
-    // Optimistically update UI
-    setDraggedCard(null)
-    
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const res = await fetch('/api/leads/stage', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session?.access_token}`
-        },
-        body: JSON.stringify({ lead_id: draggedCard, new_stage: newStage })
-      });
-      
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || "Failed to update stage");
-      }
-      
-      fetchLeadsData()
-    } catch (err: any) { alert(err.message) }
+    setLeads(prev => prev.map(l => l.id === leadId ? { ...l, stage: columnId } : l))
+    await supabase.from('leads').update({ stage: columnId }).eq('id', leadId).eq('organization_id', orgId)
   }
 
-  async function handleFollowUp(leadId: string, email: string) {
-    if (!email) { alert("Lead has no email."); return }
+  const handleOpenLead = (lead: any) => {
+    setSelectedLead(lead)
+    setDealTerms({
+      final_rent: lead.budget_max?.toString() || "",
+      deposit_amount: "", move_in_date: lead.move_in_timeline || "",
+      lease_length: "12", concessions: ""
+    })
+    setSidebarTab("terms")
+  }
+
+  const handleRequestSignoff = async () => {
+    setIsSubmitting(true)
     try {
-      const { error } = await supabase.from('leads').update({ 
-        last_contact_at: new Date().toISOString(),
-        next_follow_up_at: new Date().toISOString()
-      }).eq('id', leadId)
+      if (!process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          action: "request_signoff", lead_id: selectedLead.id, lead_name: selectedLead.full_name,
+          organization_id: orgId, requested_by: currentUser?.id, terms: dealTerms
+        })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
       
-      if (error) throw error
-      alert("Follow-up scheduled! The n8n sequence will pick this up automatically.")
-      fetchLeadsData()
-    } catch (err: any) { alert(err.message) }
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, stage: 'pending_signoff', notes: JSON.stringify(dealTerms) } : l))
+      setSelectedLead({...selectedLead, stage: 'pending_signoff'})
+      toast.success("Sign-off requested")
+    } catch (e: any) {
+      toast.error("Request failed")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  async function saveSettings() {
-    setIsSavingSettings(true)
+  const handleApproveDeal = async () => {
+    setIsSubmitting(true)
     try {
-      const orgId = await getOrCreateOrg()
-      const { error } = await supabase.from('organizations').update({ lead_settings: { questions } }).eq('id', orgId)
-      if (error) throw error
-      setShowSettings(false)
-    } catch (err: any) { alert(err.message) }
-    finally { setIsSavingSettings(false) }
+      if (!process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "approved", lead_id: selectedLead.id, organization_id: orgId, approved_by: currentUser?.id })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
+      
+      setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, stage: 'closed_won' } : l))
+      setSelectedLead(null)
+      toast.success("Deal approved")
+    } catch (e: any) {
+      toast.error("Approval failed")
+    } finally {
+      setIsSubmitting(false)
+    }
   }
 
-  useGSAP(() => {
-    if (loading) return
-    gsap.timeline({ defaults: { ease: "power3.out" } })
-      .fromTo(".page-header", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45 })
-      .fromTo(".kanban-col",  { opacity: 0, y: 28, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.5, stagger: 0.08, ease: "back.out(1.3)" }, "-=0.2")
-      .fromTo(".kanban-card", { opacity: 0, y: 16, scale: 0.94 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, stagger: 0.05, ease: "back.out(1.4)" }, "-=0.2")
-  }, { scope: ref, dependencies: [loading] })
+  const formatCurrency = (val: number) => val ? `₹${val.toLocaleString('en-IN')}` : '-'
+  const getDaysInStage = (date: string) => Math.max(0, Math.floor((Date.now() - new Date(date).getTime()) / 86400000))
 
   return (
-    <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "24px", height: "calc(100vh - 100px)" }}>
-      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)", flexShrink: 0  }}>
+    <div className="h-[calc(100vh-2rem)] flex flex-col relative">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <p style={{ color: "var(--text-3)", fontSize: "12px", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: "4px" }}>CRM</p>
-          <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            <UserPlus size={22} color="var(--text-2)" /> Leads Pipeline
-          </h1>
-          <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Track and convert prospective tenants.</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Leads</h1>
+          <p className="text-[#A1A1AA]">Manage pipeline and deal sign-offs</p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={() => setShowSettings(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
-          >
-            <Settings2 size={14} /> Settings
-          </button>
-          <button onClick={() => { setForm({...form, stage: "new"}); setShowModal(true) }} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-          ><Plus size={14} /> Add Lead</button>
-        </div>
-      </header>
-
-      <div style={{ flex: 1, display: "flex", gap: "14px", overflowX: "auto", paddingBottom: "16px" }}>
-        {loading ? (
-          [1,2,3,4,5].map(i => (
-             <div key={i} className="skeleton kanban-col" style={{ minWidth: "220px", flex: 1, borderRadius: "14px", background: "var(--surface)" }} />
-          ))
-        ) : columns.map(({ id, label, color, cards }) => (
-          <div key={id} className="kanban-col" 
-            onDragOver={e => e.preventDefault()}
-            onDrop={e => handleDrop(e, id)}
-            style={{ minWidth: "220px", flex: 1, display: "flex", flexDirection: "column", borderRadius: "14px", background: "var(--surface)", border: "1px solid var(--border)", overflow: "hidden" }}>
-            {/* Column header */}
-            <div style={{ padding: "14px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `2px solid ${color}` }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <div style={{ width: "7px", height: "7px", borderRadius: "50%", background: color, boxShadow: `0 0 8px ${color}` }} />
-                <span style={{ fontFamily: "'Sora',sans-serif", fontWeight: 600, fontSize: "13px", color: "#fff" }}>{label}</span>
-              </div>
-              <span style={{ fontSize: "11px", fontWeight: 600, padding: "2px 8px", borderRadius: "99px", background: "#1E1E1E", color, border: `1px solid ${color}25` }}>{cards.length}</span>
-            </div>
-
-            {/* Cards */}
-            <div style={{ flex: 1, padding: "10px", display: "flex", flexDirection: "column", gap: "8px", overflowY: "auto" }}>
-              {cards.map((card: any) => (
-                <div key={card.id} className="kanban-card" 
-                  draggable
-                  onDragStart={() => setDraggedCard(card.id)}
-                  style={{ padding: "14px", borderRadius: "10px", background: "var(--surface-2)", border: "1px solid var(--border)", cursor: "grab", transition: "all 0.2s" }}
-                  onMouseEnter={e => gsap.to(e.currentTarget, { y: -2, boxShadow: `0 8px 20px rgba(0,0,0,0.35)`, borderColor: "var(--border-2)", duration: 0.2 })}
-                  onMouseLeave={e => gsap.to(e.currentTarget, { y: 0,  boxShadow: "none", borderColor: "var(--border)", duration: 0.3, ease: "back.out(1.5)" })}
-                >
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "6px" }}>
-                    <span style={{ fontWeight: 600, fontSize: "13px", color: "#fff" }}>{card.name}</span>
-                    <button style={{ color: "var(--text-3)", background: "none", border: "none", cursor: "pointer", padding: "0" }}><MoreHorizontal size={13} /></button>
-                  </div>
-                  <p style={{ fontSize: "12px", color: "var(--text-2)", margin: "0 0 10px", lineHeight: 1.4 }}>{card.note}</p>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: "10px", borderTop: "1px solid var(--border)" }}>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-                      <span style={{ fontSize: "11px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{card.time}</span>
-                      {card.last_contact_at && (
-                        <span style={{ fontSize: "9px", color: "#f97316", fontWeight: 500 }}>
-                          Last: {new Date(card.last_contact_at).toLocaleDateString('en-GB', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                      <button onClick={() => handleFollowUp(card.id, card.email)} style={{ padding: "4px 8px", borderRadius: "6px", background: "rgba(249,115,22,0.1)", border: "1px solid rgba(249,115,22,0.2)", color: "#f97316", display: "flex", alignItems: "center", gap: "4px", cursor: "pointer", fontSize: "10px", fontWeight: 600, marginRight: "4px" }}>
-                        <Send size={10} /> Follow-up
-                      </button>
-                      <button style={{ width: "22px", height: "22px", borderRadius: "6px", background: "#0D0D0D", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", color: "var(--text-3)" }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `rgba(59,130,246,0.12)`; e.currentTarget.style.color = "#3b82f6" }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
-                      ><Phone size={10} /></button>
-                      <button style={{ width: "22px", height: "22px", borderRadius: "6px", background: "#0D0D0D", border: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer", transition: "all 0.15s", color: "var(--text-3)" }}
-                        onMouseEnter={e => { e.currentTarget.style.background = `rgba(59,130,246,0.12)`; e.currentTarget.style.color = "#3b82f6" }}
-                        onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
-                      ><Mail size={10} /></button>
-                      <div style={{ width: "22px", height: "22px", borderRadius: "6px", background: `${card.bg}25`, border: `1px solid ${card.bg}35`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "9px", fontWeight: 700, color: card.bg }}>{card.initials}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-
-              {/* Add card button */}
-              <button onClick={() => { setForm({...form, stage: id}); setShowModal(true) }} style={{ padding: "10px", borderRadius: "10px", border: "1px dashed var(--border)", background: "transparent", color: "var(--text-3)", fontSize: "12px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", transition: "all 0.2s" }}
-                onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.borderColor = "var(--border-2)"; e.currentTarget.style.background = "rgba(255,255,255,0.03)" }}
-                onMouseLeave={e => { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.background = "transparent" }}
-              ><Plus size={12} /> Add card</button>
-            </div>
+        
+        <div className="flex gap-3">
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-lg p-1 flex">
+            <button onClick={() => setViewMode('kanban')} className={`p-1.5 rounded ${viewMode === 'kanban' ? 'bg-[#1E1E1E] text-white' : 'text-[#A1A1AA] hover:text-white'}`}><LayoutGrid size={16}/></button>
+            <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-[#1E1E1E] text-white' : 'text-[#A1A1AA] hover:text-white'}`}><List size={16}/></button>
           </div>
-        ))}
+          <button onClick={() => setShowCreateModal(true)} className="px-4 py-2 text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+            <Plus size={16}/> Add Lead
+          </button>
+        </div>
       </div>
 
-      {/* Add Lead Modal */}
-      {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "500px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><UserPlus size={18} color="#ec4899" /> New Lead</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+      {loading ? (
+        <div className="flex-1 flex gap-4 overflow-hidden">
+          {[1,2,3,4].map(i => <div key={i} className="min-w-[300px] flex-1 bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="flex-1 flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
+          {COLUMNS.map(col => {
+            const columnLeads = leads.filter(l => 
+              l.stage === col.id || 
+              (col.id === 'closed_won' && l.stage === 'closed_lost')
+            )
+            return (
+              <div 
+                key={col.id} 
+                className="min-w-[300px] flex-1 bg-[#0D0D0D]/50 border border-[#1E1E1E] rounded-xl flex flex-col"
+                onDragOver={handleDragOver}
+                onDrop={(e) => handleDrop(e, col.id)}
+              >
+                <div className="p-4 border-b border-[#1E1E1E] flex justify-between items-center">
+                  <span className={`px-3 py-1 rounded-full text-xs font-semibold ${col.color}`}>
+                    {col.title}
+                  </span>
+                  <span className="text-sm font-medium text-[#A1A1AA] bg-black px-2 py-0.5 rounded-full border border-[#1E1E1E]">
+                    {columnLeads.length}
+                  </span>
+                </div>
+                
+                <div className="p-3 flex-1 overflow-y-auto space-y-3">
+                  {columnLeads.map(lead => (
+                    <div 
+                      key={lead.id}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, lead.id)}
+                      onClick={() => handleOpenLead(lead)}
+                      className="bg-black border border-[#1E1E1E] hover:border-white/20 p-4 rounded-lg cursor-pointer transition-all hover:shadow-lg hover:-translate-y-0.5 group"
+                    >
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="font-medium text-white truncate max-w-[150px]">{lead.full_name}</div>
+                        <div className={`text-xs px-2 py-0.5 rounded border ${lead.lead_score >= 70 ? 'border-green-500/20 text-green-400 bg-green-500/10' : 'border-amber-500/20 text-amber-400 bg-amber-500/10'}`}>
+                          {lead.lead_score || 0}
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-[#A1A1AA] mb-3 flex items-center gap-2 truncate">
+                        <span className="capitalize">{lead.inquiry_type}</span> • {lead.preferred_area}
+                      </div>
+                      
+                      <div className="flex justify-between items-center text-xs">
+                        <div className="font-semibold text-white bg-[#1E1E1E] px-2 py-1 rounded">
+                          {formatCurrency(lead.budget_max)}
+                        </div>
+                        <div className="text-[#A1A1AA] flex items-center gap-1">
+                          <Activity size={12}/> {getDaysInStage(lead.created_at)}d
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Sidebar Overlay */}
+      {selectedLead && (
+        <div className="absolute top-0 right-0 h-full w-[450px] bg-black border-l border-[#1E1E1E] shadow-2xl z-50 flex flex-col animate-in slide-in-from-right duration-300">
+          <div className="p-5 border-b border-[#1E1E1E] flex justify-between items-start bg-[#0D0D0D]">
+            <div>
+              <h2 className="text-xl font-bold text-white">{selectedLead.full_name}</h2>
+              <div className="text-sm text-[#A1A1AA] mt-1 flex items-center gap-2">
+                <span className="capitalize">{selectedLead.stage.replace('_', ' ')}</span> • 
+                Score: <span className="text-white font-medium">{selectedLead.lead_score}</span>
+              </div>
+            </div>
+            <button onClick={() => setSelectedLead(null)} className="p-2 text-[#A1A1AA] hover:text-white rounded-full hover:bg-[#1E1E1E] transition-colors"><X size={18}/></button>
+          </div>
+          
+          <div className="flex border-b border-[#1E1E1E] bg-[#0D0D0D]">
+            {[
+              { id: "context", label: "Context", icon: FileText },
+              { id: "terms", label: "Deal Terms", icon: CheckCircle2 },
+              { id: "activity", label: "Activity", icon: Activity }
+            ].map(t => (
+              <button 
+                key={t.id} onClick={() => setSidebarTab(t.id)}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 text-sm font-medium transition-colors border-b-2 ${sidebarTab === t.id ? 'border-white text-white' : 'border-transparent text-[#A1A1AA] hover:text-white hover:bg-[#1E1E1E]/50'}`}
+              >
+                <t.icon size={14}/> {t.label}
+              </button>
+            ))}
+          </div>
+          
+          <div className="flex-1 overflow-y-auto p-5 bg-black">
+            {sidebarTab === "context" && (
+              <div className="space-y-6 text-sm">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <div className="text-[#A1A1AA] text-xs uppercase">Email</div>
+                    <div className="text-white break-all">{selectedLead.email || '-'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[#A1A1AA] text-xs uppercase">Phone</div>
+                    <div className="text-white">{selectedLead.phone || '-'}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[#A1A1AA] text-xs uppercase">Budget</div>
+                    <div className="text-white">{formatCurrency(selectedLead.budget_min)} - {formatCurrency(selectedLead.budget_max)}</div>
+                  </div>
+                  <div className="space-y-1">
+                    <div className="text-[#A1A1AA] text-xs uppercase">Property Type</div>
+                    <div className="text-white capitalize">{selectedLead.property_type}</div>
+                  </div>
+                </div>
+                
+                <div className="space-y-2">
+                  <div className="text-[#A1A1AA] text-xs uppercase">Notes</div>
+                  <div className="bg-[#0D0D0D] border border-[#1E1E1E] p-3 rounded-lg text-white whitespace-pre-wrap leading-relaxed">
+                    {selectedLead.notes || 'No notes available.'}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {sidebarTab === "terms" && (
+              <div className="space-y-5">
+                <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-lg p-5">
+                  <h3 className="text-white font-medium mb-4 flex items-center gap-2"><CheckCircle2 size={16} className="text-purple-400"/> Proposed Deal Terms</h3>
+                  
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-xs text-[#A1A1AA] mb-1">Final Agreed Rent (₹)</label>
+                      <input 
+                        type="number" value={dealTerms.final_rent} onChange={e => setDealTerms({...dealTerms, final_rent: e.target.value})}
+                        disabled={selectedLead.stage === 'pending_signoff'}
+                        className="w-full bg-black border border-[#1E1E1E] rounded p-2 text-white text-sm focus:border-white/30 outline-none disabled:opacity-50" 
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs text-[#A1A1AA] mb-1">Deposit</label>
+                        <input 
+                          type="number" value={dealTerms.deposit_amount} onChange={e => setDealTerms({...dealTerms, deposit_amount: e.target.value})}
+                          disabled={selectedLead.stage === 'pending_signoff'}
+                          className="w-full bg-black border border-[#1E1E1E] rounded p-2 text-white text-sm outline-none disabled:opacity-50" 
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs text-[#A1A1AA] mb-1">Length (Months)</label>
+                        <select 
+                          value={dealTerms.lease_length} onChange={e => setDealTerms({...dealTerms, lease_length: e.target.value})}
+                          disabled={selectedLead.stage === 'pending_signoff'}
+                          className="w-full bg-black border border-[#1E1E1E] rounded p-2 text-white text-sm outline-none disabled:opacity-50"
+                        >
+                          <option value="6">6 Months</option>
+                          <option value="11">11 Months</option>
+                          <option value="12">12 Months</option>
+                          <option value="24">24 Months</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#A1A1AA] mb-1">Move-in Date</label>
+                      <input 
+                        type="date" value={dealTerms.move_in_date} onChange={e => setDealTerms({...dealTerms, move_in_date: e.target.value})}
+                        disabled={selectedLead.stage === 'pending_signoff'}
+                        className="w-full bg-black border border-[#1E1E1E] rounded p-2 text-white text-sm outline-none disabled:opacity-50" 
+                        style={{colorScheme: 'dark'}}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs text-[#A1A1AA] mb-1">Concessions / Notes</label>
+                      <textarea 
+                        value={dealTerms.concessions} onChange={e => setDealTerms({...dealTerms, concessions: e.target.value})}
+                        disabled={selectedLead.stage === 'pending_signoff'}
+                        rows={3} className="w-full bg-black border border-[#1E1E1E] rounded p-2 text-white text-sm outline-none disabled:opacity-50 resize-none" 
+                        placeholder="e.g. 1 month free rent"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="mt-6 pt-5 border-t border-[#1E1E1E]">
+                    {selectedLead.stage === 'negotiating' && (
+                      <div className="space-y-3">
+                        <button 
+                          onClick={async () => {
+                            const msg = prompt("Enter follow-up note:");
+                            if (!msg) return;
+                            const newNotes = selectedLead.notes ? `${selectedLead.notes}\n[${new Date().toLocaleDateString()}] Follow-up: ${msg}` : `[${new Date().toLocaleDateString()}] Follow-up: ${msg}`;
+                            await supabase.from('leads').update({ notes: newNotes, last_contact_at: new Date().toISOString() }).eq('id', selectedLead.id);
+                            setSelectedLead({...selectedLead, notes: newNotes});
+                            toast.success("Follow-up logged successfully");
+                          }}
+                          className="w-full text-white py-2.5 rounded text-sm font-medium transition-opacity flex items-center justify-center gap-2 hover:opacity-90 bg-[#1E1E1E]"
+                        >
+                          <MessageSquare size={14}/> Log Follow-up
+                        </button>
+                        <button 
+                          onClick={handleRequestSignoff} disabled={isSubmitting}
+                          className="w-full text-white py-2.5 rounded text-sm font-medium transition-opacity flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50"
+                          style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}
+                        >
+                          {isSubmitting && <Loader2 size={16} className="animate-spin"/>} Request Manager Sign-Off
+                        </button>
+                      </div>
+                    )}
+                    
+                    {selectedLead.stage === 'pending_signoff' && (
+                      <div className="space-y-3">
+                        <div className="bg-purple-500/10 border border-purple-500/20 text-purple-400 p-3 rounded text-sm flex items-start gap-2">
+                          <MessageSquare size={16} className="mt-0.5 shrink-0"/>
+                          This deal is awaiting manager approval. Terms are locked.
+                        </div>
+                        <button 
+                          onClick={handleApproveDeal} disabled={isSubmitting}
+                          className="w-full text-white py-2.5 rounded text-sm font-medium transition-opacity flex items-center justify-center gap-2 hover:opacity-90 disabled:opacity-50"
+                          style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}
+                        >
+                          {isSubmitting && <Loader2 size={16} className="animate-spin"/>} Approve Deal (Manager Only)
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+            
+            {sidebarTab === "activity" && (
+              <div className="text-center p-10 text-[#A1A1AA] text-sm">
+                <Activity className="mx-auto mb-3 opacity-50" size={32}/>
+                Activity feed coming soon.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* Create Lead Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]">
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Add New Lead</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-[#A1A1AA] hover:text-white"><X size={20}/></button>
             </div>
             
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div className="space-y-4">
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Full Name</label>
-                <input type="text" placeholder="e.g. John Doe" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                <label className="block text-sm text-[#A1A1AA] mb-1">Full Name *</label>
+                <input value={newLead.full_name} onChange={e=>setNewLead({...newLead, full_name: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. John Doe" />
               </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</label>
-                  <input type="email" placeholder="john@example.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Email</label>
+                  <input type="email" value={newLead.email} onChange={e=>setNewLead({...newLead, email: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="john@example.com" />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone</label>
-                  <input type="tel" placeholder="+91 98765 43210" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Phone</label>
+                  <input type="tel" value={newLead.phone} onChange={e=>setNewLead({...newLead, phone: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="+1 234 567 890" />
                 </div>
               </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Stage</label>
-                  <select value={form.stage} onChange={e => setForm({...form, stage: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                    <option value="new">New Intake</option>
-                    <option value="qualified">Qualified</option>
-                    <option value="viewing">Viewing</option>
-                    <option value="negotiating">Negotiating</option>
-                    <option value="closed">Closed</option>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Inquiry Type</label>
+                  <select value={newLead.inquiry_type} onChange={e=>setNewLead({...newLead, inquiry_type: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                    <option value="residential">Residential</option>
+                    <option value="commercial">Commercial</option>
                   </select>
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Budget Max (₹)</label>
-                  <input type="number" placeholder="e.g. 50000" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Max Budget</label>
+                  <input type="number" value={newLead.budget_max} onChange={e=>setNewLead({...newLead, budget_max: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. 50000" />
                 </div>
               </div>
-
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Notes / Requirements</label>
-                <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} placeholder="Looking for a 2BHK near metro..." rows={3} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", resize: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                <label className="block text-sm text-[#A1A1AA] mb-1">Preferred Area</label>
+                <input value={newLead.preferred_area} onChange={e=>setNewLead({...newLead, preferred_area: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. Downtown" />
               </div>
             </div>
 
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitLead} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
-                {isSubmitting ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Save Lead"}
+            <div className="flex gap-3 mt-8">
+              <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors font-medium">Cancel</button>
+              <button onClick={handleCreateLead} disabled={isSubmitting} className="flex-1 px-4 py-2 text-white font-medium text-sm rounded-lg flex justify-center items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+                {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : "Create Lead"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Settings Modal */}
-      {showSettings && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "450px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Settings2 size={18} color="#ec4899" /> Lead Settings</h2>
-              <button onClick={() => setShowSettings(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-            
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Qualification Questions</label>
-                <p style={{ fontSize: "12px", color: "var(--text-2)", marginBottom: "12px" }}>These questions will be sent via email to new leads via the n8n automation.</p>
-                <textarea value={questions} onChange={e => setQuestions(e.target.value)} placeholder="1. When are you looking to move?&#10;2. How many bedrooms?&#10;3. Do you have pets?" rows={6} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", resize: "none", fontFamily: "'DM Sans',sans-serif", lineHeight: 1.5 }} />
-              </div>
-            </div>
-
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowSettings(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={saveSettings} disabled={isSavingSettings} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSavingSettings ? "not-allowed" : "pointer", opacity: isSavingSettings ? 0.7 : 1 }}>
-                {isSavingSettings ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Save Settings"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style dangerouslySetInnerHTML={{__html: `@keyframes spin { 100% { transform: rotate(360deg); } }`}} />
     </div>
   )
 }

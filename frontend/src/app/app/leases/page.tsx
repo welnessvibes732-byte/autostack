@@ -1,459 +1,358 @@
 "use client"
-import { useRef, useState, useEffect } from "react"
-import gsap from "gsap"
-import { useGSAP } from "@gsap/react"
-import { Plus, Upload, Search, KeySquare, FileText, AlertTriangle, X, Loader2, CheckCircle2 } from "lucide-react"
+
+import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
+import { 
+  FileText, Upload, Plus, CheckCircle2, AlertTriangle, Eye, Loader2, KeySquare, Calendar
+} from "lucide-react"
+import toast from "react-hot-toast"
 
-gsap.registerPlugin(useGSAP)
-
-export default function Leases() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [leases, setLeases] = useState<any[]>([])
+export default function LeasesPage() {
+  const [activeTab, setActiveTab] = useState("active")
   const [loading, setLoading] = useState(true)
+  const [orgId, setOrgId] = useState("")
+  const [currentUser, setCurrentUser] = useState<any>(null)
   
-  // Modal states
-  const [showCreateModal, setShowCreateModal] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [tenantsList, setTenantsList] = useState<any[]>([])
-  const [unitsList, setUnitsList] = useState<any[]>([])
-  const [form, setForm] = useState({
-    tenant_id: "",
-    unit_id: "",
-    start_date: new Date().toISOString().split('T')[0],
-    expiry_date: new Date(Date.now() + 31536000000).toISOString().split('T')[0],
-    rent_amount: ""
-  })
+  const [leases, setLeases] = useState<any[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
-  // Upload states
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [uploadFile, setUploadFile] = useState<File | null>(null)
-  const [uploadTenantId, setUploadTenantId] = useState("")
-  const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'processing'|'success'>('idle')
+  // Create Lease Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newLease, setNewLease] = useState({
+    tenant_name: "", tenant_email: "", tenant_phone: "", rent_amount: "", start_date: "", expiry_date: ""
+  })
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
   useEffect(() => {
-    async function fetchLeases() {
-      try {
-        const { data, error } = await supabase.from('leases').select(`
-          *,
-          tenant:tenants ( full_name ),
-          unit:units ( unit_number, property:properties(name) )
-        `)
-        if (error) throw error;
-        
-        const transformed = (data || []).map(l => {
-          const tenantName = l.tenant?.full_name || 'Unknown Tenant';
-          const initials = tenantName.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '??';
-          
-          let unitName = l.unit?.unit_number || 'Unassigned';
-          if (l.unit?.property?.name) {
-            unitName += ` – ${l.unit.property.name}`;
-          }
-
-          const rentNum = Number(l.rent_amount || 0);
-          const rentStr = rentNum > 0 ? (rentNum >= 100000 ? `₹${(rentNum/100000).toFixed(1)}L` : `₹${(rentNum/1000).toFixed(1)}K`) : '—';
-          
-          const startDate = new Date(l.start_date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-          const endDate = new Date(l.expiry_date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' });
-          
-          const now = new Date();
-          const expiry = new Date(l.expiry_date);
-          const diffTime = expiry.getTime() - now.getTime();
-          const daysLeft = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          
-          let status = l.lease_status || 'Unknown';
-          let statusColor = '#3b82f6';
-          
-          if (status.toLowerCase() === 'active') {
-            if (daysLeft < 0) {
-              status = 'Expired';
-              statusColor = '#f43f5e';
-            } else if (daysLeft <= 30) {
-              status = 'Expiring soon';
-              statusColor = '#f43f5e';
-            } else if (daysLeft <= 90) {
-              status = 'Expiring';
-              statusColor = '#f59e0b';
-            } else {
-              status = 'Active';
-              statusColor = '#10b981';
-            }
-          }
-
-          const colors = ['#3b82f6', '#7c3aed', '#f59e0b', '#10b981', '#f43f5e'];
-          const colorIndex = tenantName.length % colors.length;
-          
-          return {
-            id: l.id,
-            tenant: tenantName,
-            initials,
-            color: colors[colorIndex],
-            unit: unitName,
-            rent: rentStr,
-            start: startDate,
-            end: endDate,
-            status,
-            statusColor,
-            daysLeft
-          }
-        })
-        setLeases(transformed)
-      } catch(e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
-    fetchLeases()
+    init()
   }, [])
 
-  // Fetch tenants and units when opening modal
-  useEffect(() => {
-    if (showCreateModal || showUploadModal) {
-      const fetchFormOptions = async () => {
-        const [{ data: tData }, { data: uData }] = await Promise.all([
-          supabase.from('tenants').select('id, full_name'),
-          supabase.from('units').select('id, unit_number, property:properties(name)').eq('status', 'vacant')
-        ]);
-        if (tData) setTenantsList(tData);
-        if (uData) setUnitsList(uData);
-      };
-      fetchFormOptions();
-    }
-  }, [showCreateModal, showUploadModal])
-
-  const submitLease = async () => {
-    if (!form.tenant_id || !form.unit_id || !form.start_date || !form.expiry_date || !form.rent_amount) {
-      alert("Please fill in all fields.");
-      return;
-    }
-    
-    setIsSubmitting(true);
+  const init = async () => {
     try {
-      const organization_id = await getOrCreateOrg();
-
-      const { error: leaseErr } = await supabase.from('leases').insert({
-        organization_id,
-        tenant_id: form.tenant_id,
-        unit_id: form.unit_id,
-        start_date: form.start_date,
-        expiry_date: form.expiry_date,
-        rent_amount: parseFloat(form.rent_amount),
-        lease_status: 'Active'
-      });
-
-      if (leaseErr) throw leaseErr;
-
-      const { error: unitErr } = await supabase.from('units').update({ status: 'occupied' }).eq('id', form.unit_id);
-      if (unitErr) throw unitErr;
-
-      setShowCreateModal(false);
-      window.location.reload();
-    } catch (err: any) {
-      alert("Error: " + err.message);
-      setIsSubmitting(false);
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+      const org = await getOrCreateOrg()
+      setOrgId(org)
+      
+      await fetchLeases(org)
+      
+      const channelId = `leases-page-${Math.random()}`
+      const channel = supabase.channel(channelId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'leases', filter: `organization_id=eq.${org}` }, () => fetchLeases(org))
+        .subscribe()
+      return () => { supabase.removeChannel(channel) }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const submitUpload = async () => {
-    if (!uploadFile) return;
+  const fetchLeases = async (org: string) => {
+    const { data } = await supabase.from('leases').select(`
+      *, units(unit_number, properties(name, city))
+    `).eq('organization_id', org).order('expiry_date', { ascending: true })
+    if (data) setLeases(data)
+  }
 
-    setShowUploadModal(false);
-    setUploadStatus('uploading');
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
 
+    setIsUploading(true)
+    const toastId = toast.loading("Uploading lease...")
     try {
-      const organization_id = await getOrCreateOrg();
+      const filePath = `${orgId}/${Date.now()}_${file.name}`
+      
+      const { error: uploadError } = await supabase.storage.from('leases').upload(filePath, file)
+      if (uploadError) throw uploadError
 
-      // Upload to bucket
-      const filePath = `${organization_id}/${Date.now()}_${uploadFile.name}`;
-      const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, uploadFile);
-      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
-
-      setUploadStatus('processing');
-
-      // Insert row into documents — capture the returned ID
-      const { data: docData, error: dbErr } = await supabase.from('documents').insert({
-        organization_id,
-        lease_id: null,
+      const { data: inserted, error: dbError } = await supabase.from('leases').insert({
+        organization_id: orgId,
+        file_name: file.name,
         file_path: filePath,
-        file_name: uploadFile.name,
-        file_size_bytes: uploadFile.size,
-        file_type: 'pdf',
-        doc_type: 'lease',
-        authority_level: 4,
-        is_binding: true,
-        index_status: 'pending'
-      }).select('id').single();
-      if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
+        lease_status: 'draft',
+        rent_amount: 0
+      }).select().single()
+      if (dbError) throw dbError
 
-      const document_id = docData?.id || null;
-
-      // Bucket is private — generate a signed URL (2 hours) so n8n can download the file
-      const { data: signedData } = await supabase.storage
-        .from('documents')
-        .createSignedUrl(filePath, 7200); // 7200 seconds = 2 hours
-      const download_url = signedData?.signedUrl || null;
-
-      // Call n8n webhook with full metadata
-      const webhookRes = await fetch('http://localhost:5678/webhook-test/02169021-3bd5-4731-9232-18ee8906ce05', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          event:           'lease_uploaded',
-          document_id:     document_id,      // ← n8n updates index_status using this
-          file_path:       filePath,
-          download_url:    download_url,     // ← n8n HTTP Request node downloads from here (signed, 2hr)
-          file_name:       uploadFile.name,
-          file_size_bytes: uploadFile.size,
-          organization_id: organization_id,
-          tenant_id:       uploadTenantId || null,
-          lease_id:        null,
-        })
-      });
-
-      if (!webhookRes.ok) {
-        throw new Error(`n8n Webhook failed with status: ${webhookRes.status}. Make sure "Listen for Test Event" is active!`);
+      if (process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK) {
+        fetch(process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: orgId, file_name: file.name, type: 'lease', lease_id: inserted.id })
+        }).catch(console.error)
       }
 
-      setUploadStatus('success');
-      setTimeout(() => setUploadStatus('idle'), 4000); // hide after 4s
-      
-      setUploadFile(null);
-      setUploadTenantId("");
-    } catch (err: any) {
-      alert("Error: " + err.message);
-      setUploadStatus('idle');
+      toast.success("Lease uploaded! AI is processing data.", { id: toastId })
+    } catch (err) {
+      toast.error("Upload failed", { id: toastId })
+    } finally {
+      setIsUploading(false)
+      if (e.target) e.target.value = ""
     }
   }
 
-  useGSAP(() => {
-    if (loading) return
-    gsap.timeline({ defaults: { ease: "power3.out" } })
-      .fromTo(".page-header", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45 })
-      .fromTo(".anim-filter", { opacity: 0, y: 10  }, { opacity: 1, y: 0, duration: 0.3 }, "-=0.15")
-      .fromTo(".anim-row",    { opacity: 0, x: -18 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.08 }, "-=0.1")
-  }, { scope: ref, dependencies: [loading] })
+  const handleCreateLease = async () => {
+    if (!newLease.tenant_name || !newLease.rent_amount || !newLease.start_date || !newLease.expiry_date) {
+      return toast.error("Please fill all required fields")
+    }
+    setIsSubmitting(true)
+    try {
+      const { error } = await supabase.from('leases').insert({
+        organization_id: orgId,
+        tenant_name: newLease.tenant_name,
+        tenant_email: newLease.tenant_email,
+        tenant_phone: newLease.tenant_phone,
+        rent_amount: Number(newLease.rent_amount),
+        start_date: newLease.start_date,
+        expiry_date: newLease.expiry_date,
+        lease_status: 'active',
+        renewal_status: 'pending'
+      })
+      if (error) throw error
+      toast.success("Lease created successfully")
+      setShowCreateModal(false)
+      setNewLease({ tenant_name: "", tenant_email: "", tenant_phone: "", rent_amount: "", start_date: "", expiry_date: "" })
+      fetchLeases(orgId)
+    } catch (e: any) {
+      toast.error("Failed to create lease")
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  const handleSendRenewal = async (lease: any) => {
+    setProcessingId(lease.id)
+    try {
+      if (!process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "send_renewal_offer", lease_id: lease.id, tenant_name: lease.tenant_name, tenant_email: lease.tenant_email, unit_id: lease.unit_id, expiry_date: lease.expiry_date, current_rent: lease.rent_amount, organization_id: orgId })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
+      
+      setLeases(prev => prev.map(l => l.id === lease.id ? { ...l, renewal_status: 'offered' } : l))
+      toast.success("Renewal offer sent to tenant")
+    } catch (e: any) {
+      toast.error("Failed to send offer")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleMarkRenewed = async (leaseId: string) => {
+    setProcessingId(leaseId)
+    try {
+      if (!process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "mark_renewed", lease_id: leaseId, organization_id: orgId })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
+      
+      setLeases(prev => prev.map(l => l.id === leaseId ? { ...l, renewal_status: 'renewed' } : l))
+      toast.success("Lease marked as renewed")
+    } catch (e: any) {
+      toast.error("Update failed")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const formatCurrency = (val: number) => val ? `₹${val.toLocaleString('en-IN')}` : '-'
+  
+  const in90Days = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).getTime()
+  
+  const activeLeases = leases.filter(l => l.lease_status === 'active')
+  const renewalsDue = leases.filter(l => l.lease_status === 'active' && new Date(l.expiry_date).getTime() <= in90Days && (!l.renewal_status || l.renewal_status === 'pending'))
+  const offersPending = leases.filter(l => l.lease_status === 'active' && l.renewal_status === 'offered')
+  const pastLeases = leases.filter(l => l.lease_status !== 'active')
+
+  const renderLeaseCard = (lease: any, viewContext: "active" | "renewal" | "offer" | "past") => {
+    const daysLeft = lease.expiry_date ? Math.ceil((new Date(lease.expiry_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)) : null
+    const isExpired = daysLeft !== null && daysLeft < 0
+    const urgencyColor = isExpired ? "text-[#A1A1AA] border-[#1E1E1E] bg-[#1E1E1E]" : daysLeft !== null && daysLeft < 30 ? "text-red-400 border-red-500/20 bg-red-500/10" : daysLeft !== null && daysLeft < 60 ? "text-amber-400 border-amber-500/20 bg-amber-500/10" : "text-green-400 border-green-500/20 bg-green-500/10"
+
+    return (
+      <div key={lease.id} className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-5 hover:border-white/20 transition-colors">
+        <div className="flex flex-col md:flex-row justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-white text-lg">{lease.tenant_name || 'Draft / Processing...'}</span>
+              {daysLeft !== null && (
+                <span className={`px-2 py-0.5 rounded text-xs border ${urgencyColor}`}>
+                  {isExpired ? `Expired ${Math.abs(daysLeft)} days ago` : `${daysLeft} days remaining`}
+                </span>
+              )}
+            </div>
+            
+            <div className="text-sm text-[#A1A1AA] flex items-center gap-4 flex-wrap">
+              <span>{lease.units?.properties?.name || 'Unassigned Property'} — Unit {lease.units?.unit_number}</span>
+              <span>•</span>
+              <span className="flex items-center gap-1"><Calendar size={12}/> Expires: {lease.expiry_date ? new Date(lease.expiry_date).toLocaleDateString() : '---'}</span>
+            </div>
+
+            <div className="text-sm text-[#A1A1AA] mt-1">Current Rent: {formatCurrency(lease.rent_amount)}/mo</div>
+          </div>
+
+          <div className="flex flex-col items-end justify-between gap-3 min-w-[150px]">
+            <div className="flex items-center gap-2">
+              {lease.file_path && (
+                <button className="p-2 text-[#A1A1AA] hover:text-white bg-[#1E1E1E] hover:bg-white/20 rounded-md transition-colors"
+                  onClick={() => window.open(supabase.storage.from('leases').getPublicUrl(lease.file_path).data.publicUrl, '_blank')}
+                  title="View Document"
+                ><Eye size={16}/></button>
+              )}
+              
+              {viewContext === "renewal" && (
+                <button onClick={() => handleSendRenewal(lease)} disabled={processingId === lease.id} className="px-4 py-1.5 text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+                  {processingId === lease.id && <Loader2 size={14} className="animate-spin"/>} Send Renewal Offer
+                </button>
+              )}
+              
+              {viewContext === "offer" && (
+                <button onClick={() => handleMarkRenewed(lease.id)} disabled={processingId === lease.id} className="px-4 py-1.5 text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+                  {processingId === lease.id && <Loader2 size={14} className="animate-spin"/>} Mark Renewed
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)"  }}>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <p style={{ color: "var(--text-3)", fontSize: "12px", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: "4px" }}>AGREEMENTS</p>
-          <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            <KeySquare size={22} color="var(--text-2)" /> Leases
-          </h1>
-          <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Active, expiring, and historical agreements.</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Leases</h1>
+          <p className="text-[#A1A1AA]">Manage active leases and automate renewals</p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={() => setShowUploadModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
-          >
-            <Upload size={14} /> Upload Lease Contract
+        
+        <div className="flex gap-3">
+          <label className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:bg-white/20 cursor-pointer transition-colors">
+            {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>}
+            {isUploading ? "Uploading..." : "Upload Lease PDF"}
+            <input type="file" accept=".pdf" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+          </label>
+          <button onClick={() => setShowCreateModal(true)} className="px-4 py-2 text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+            <Plus size={16}/> Add Lease
           </button>
-          <button onClick={() => setShowCreateModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-          ><Plus size={14} /> Create Lease</button>
         </div>
-      </header>
+      </div>
 
-      {/* Filters */}
-      <div className="anim-filter" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-        <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
-          <Search size={14} color="var(--text-3)" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-          <input type="text" placeholder="Search tenant or property…" style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
-            onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,0.4)")}
-            onBlur={e => (e.target.style.borderColor = "var(--border-2)")}
-          />
-        </div>
-        {["All","Active","Expiring","Expired"].map((f, i) => (
-          <button key={f} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: i === 0 ? "rgba(255,255,255,0.08)" : "transparent", border: i === 0 ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: i === 0 ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
-            onMouseEnter={e => { if(i!==0){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
-            onMouseLeave={e => { if(i!==0){e.currentTarget.style.color="var(--text-3)";e.currentTarget.style.background="transparent"} }}
-          >{f}</button>
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "Active Leases", val: activeLeases.length },
+          { label: "Renewals Due (<90d)", val: renewalsDue.length, alert: renewalsDue.length > 0 },
+          { label: "Offers Sent", val: offersPending.length },
+          { label: "Archived", val: pastLeases.length }
+        ].map((kpi, i) => (
+          <div key={i} className={`bg-[#0D0D0D] border rounded-lg p-4 ${kpi.alert ? 'border-amber-500/50' : 'border-[#1E1E1E]'}`}>
+            <div className="text-2xl font-bold text-white mb-1">{kpi.val}</div>
+            <div className={`text-xs ${kpi.alert ? 'text-amber-400' : 'text-[#A1A1AA]'}`}>{kpi.label}</div>
+          </div>
         ))}
       </div>
 
-      {/* Table */}
-      <div style={{ borderRadius: "16px", background: "var(--surface)", border: "1px solid var(--border)", overflow: "hidden", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border)" }}>
-              {["Tenant","Unit","Rent/mo","Period","Days Left","Status",""].map(h => (
-                <th key={h} style={{ padding: "12px 18px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.06em", fontFamily: "'DM Mono',monospace", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              [1,2,3].map(i => (
-                <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <td style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "30px", width: "120px" }} /></td>
-                  <td style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "16px", width: "80px" }} /></td>
-                  <td style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "16px", width: "60px" }} /></td>
-                  <td style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "30px", width: "90px" }} /></td>
-                  <td style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "16px", width: "40px" }} /></td>
-                  <td style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "20px", width: "60px", borderRadius: "99px" }} /></td>
-                  <td style={{ padding: "14px 18px" }} />
-                </tr>
-              ))
-            ) : leases.map((l, i) => (
-              <tr key={l.id} className="anim-row" style={{ borderBottom: i < leases.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
-                onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-              >
-                <td style={{ padding: "14px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                    <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: `${l.color}20`, border: `1px solid ${l.color}30`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: "11px", fontWeight: 700, color: l.color, flexShrink: 0 }}>{l.initials}</div>
-                    <span style={{ fontWeight: 600, fontSize: "13px", color: "#fff" }}>{l.tenant}</span>
-                  </div>
-                </td>
-                <td style={{ padding: "14px 18px", fontSize: "13px", color: "var(--text-2)" }}>{l.unit}</td>
-                <td style={{ padding: "14px 18px", fontSize: "14px", fontWeight: 700, color: "#10b981", fontFamily: "'DM Mono',monospace" }}>{l.rent}</td>
-                <td style={{ padding: "14px 18px" }}>
-                  <div style={{ fontSize: "12px", color: "var(--text-2)" }}>{l.start}</div>
-                  <div style={{ fontSize: "11px", color: "var(--text-3)" }}>→ {l.end}</div>
-                </td>
-                <td style={{ padding: "14px 18px" }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                    {l.daysLeft <= 30 && <AlertTriangle size={12} color={l.statusColor} />}
-                    <span style={{ fontSize: "13px", fontWeight: 600, color: l.daysLeft <= 30 ? l.statusColor : "var(--text-2)", fontFamily: "'DM Mono',monospace" }}>{l.daysLeft}d</span>
-                  </div>
-                </td>
-                <td style={{ padding: "14px 18px" }}>
-                  <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${l.statusColor}15`, color: l.statusColor, border: `1px solid ${l.statusColor}30` }}>{l.status}</span>
-                </td>
-                <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                  <button style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s", marginLeft: "auto" }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#93c5fd" }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
-                  ><FileText size={13} /></button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex space-x-1 bg-[#0D0D0D] p-1 rounded-lg border border-[#1E1E1E] w-fit mb-6 overflow-x-auto">
+        {[
+          { id: "active", label: "All Active", count: activeLeases.length },
+          { id: "renewals", label: "Renewals Due", count: renewalsDue.length },
+          { id: "offers", label: "Offers Pending", count: offersPending.length },
+          { id: "past", label: "Past / Archived", count: pastLeases.length }
+        ].map(t => (
+          <button
+            key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${activeTab === t.id ? 'bg-[#1E1E1E] text-white' : 'text-[#A1A1AA] hover:text-white hover:bg-[#1E1E1E]/50'}`}
+          >
+            {t.label}
+            {t.count > 0 && <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${activeTab === t.id ? 'bg-white/10' : 'bg-[#1E1E1E]'}`}>{t.count}</span>}
+          </button>
+        ))}
       </div>
 
+      {loading ? (
+        <div className="space-y-4">
+          {[1,2,3].map(i => <div key={i} className="h-28 bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {activeTab === "active" && (
+            activeLeases.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><KeySquare className="mx-auto mb-2 opacity-50" size={32}/>No active leases found.</div>
+            : activeLeases.map(l => renderLeaseCard(l, "active"))
+          )}
+          
+          {activeTab === "renewals" && (
+            renewalsDue.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No renewals due within 90 days.</div>
+            : renewalsDue.map(l => renderLeaseCard(l, "renewal"))
+          )}
+
+          {activeTab === "offers" && (
+            offersPending.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No pending renewal offers.</div>
+            : offersPending.map(l => renderLeaseCard(l, "offer"))
+          )}
+
+          {activeTab === "past" && (
+            pastLeases.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><FileText className="mx-auto mb-2 opacity-50" size={32}/>No archived leases.</div>
+            : pastLeases.map(l => renderLeaseCard(l, "past"))
+          )}
+        </div>
+      )}
       {/* Create Lease Modal */}
       {showCreateModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "480px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Plus size={18} color="#ec4899" /> Create New Lease</h2>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]">
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white">Add New Lease</h2>
+              <button onClick={() => setShowCreateModal(false)} className="text-[#A1A1AA] hover:text-white"><Plus className="rotate-45" size={20}/></button>
             </div>
             
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div className="space-y-4">
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Tenant</label>
-                <select value={form.tenant_id} onChange={e => setForm({...form, tenant_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                  <option value="" disabled>Select a tenant...</option>
-                  {tenantsList.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-                </select>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Tenant Name *</label>
+                <input value={newLease.tenant_name} onChange={e=>setNewLease({...newLease, tenant_name: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. Jane Doe" />
               </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vacant Unit</label>
-                <select value={form.unit_id} onChange={e => setForm({...form, unit_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                  <option value="" disabled>Select a vacant unit...</option>
-                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.property?.name ? `${u.property.name} – ` : ''}{u.unit_number}</option>)}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "16px" }}>
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Start Date</label>
-                  <input type="date" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Email</label>
+                  <input type="email" value={newLease.tenant_email} onChange={e=>setNewLease({...newLease, tenant_email: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="jane@example.com" />
                 </div>
                 <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>End Date</label>
-                  <input type="date" value={form.expiry_date} onChange={e => setForm({...form, expiry_date: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Phone</label>
+                  <input type="tel" value={newLease.tenant_phone} onChange={e=>setNewLease({...newLease, tenant_phone: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="+1 234 567 890" />
                 </div>
               </div>
-
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Rent Amount (₹)</label>
-                <input type="number" placeholder="e.g. 25000" value={form.rent_amount} onChange={e => setForm({...form, rent_amount: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                <label className="block text-sm text-[#A1A1AA] mb-1">Monthly Rent *</label>
+                <input type="number" value={newLease.rent_amount} onChange={e=>setNewLease({...newLease, rent_amount: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. 15000" />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Start Date *</label>
+                  <input type="date" value={newLease.start_date} onChange={e=>setNewLease({...newLease, start_date: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Expiry Date *</label>
+                  <input type="date" value={newLease.expiry_date} onChange={e=>setNewLease({...newLease, expiry_date: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" />
+                </div>
               </div>
             </div>
 
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowCreateModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitLease} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
-                {isSubmitting ? <><Loader2 size={14} className="spin" /> Creating...</> : "Save Lease"}
+            <div className="flex gap-3 mt-8">
+              <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors font-medium">Cancel</button>
+              <button onClick={handleCreateLease} disabled={isSubmitting} className="flex-1 px-4 py-2 text-white font-medium text-sm rounded-lg flex justify-center items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+                {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : "Create Lease"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Upload Modal */}
-      {showUploadModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "400px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Upload size={18} color="#3b82f6" /> Upload Lease</h2>
-              <button onClick={() => setShowUploadModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-            
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Document (PDF)</label>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "100px", border: "1px dashed var(--border-2)", borderRadius: "10px", background: "rgba(255,255,255,0.02)", cursor: "pointer", position: "relative" }}>
-                  <input type="file" accept="application/pdf" onChange={e => setUploadFile(e.target.files?.[0] || null)} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
-                  {uploadFile ? (
-                    <span style={{ fontSize: "14px", color: "#3b82f6", fontWeight: 500, display: "flex", alignItems: "center", gap: "8px" }}><FileText size={16} /> {uploadFile.name}</span>
-                  ) : (
-                    <span style={{ fontSize: "13px", color: "var(--text-3)" }}>Click or drag PDF here</span>
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Assign to Tenant</label>
-                <select value={uploadTenantId} onChange={e => setUploadTenantId(e.target.value)} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
-                  <option value="">Leave Unassigned</option>
-                  {tenantsList.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-                </select>
-              </div>
-            </div>
-
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowUploadModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitUpload} disabled={!uploadFile} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: uploadFile ? "#3b82f6" : "#1E1E1E", border: "none", color: uploadFile ? "#fff" : "#666", fontSize: "13px", fontWeight: 600, cursor: uploadFile ? "pointer" : "not-allowed" }}>
-                Upload Document
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upload Status Toast */}
-      {uploadStatus !== 'idle' && (
-        <div style={{ position: "fixed", bottom: "30px", right: "30px", zIndex: 1000, background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", animation: "slideUp 0.3s ease-out forwards" }}>
-          {uploadStatus === 'uploading' && <Loader2 size={18} color="#3b82f6" className="spin" />}
-          {uploadStatus === 'processing' && <Loader2 size={18} color="#f59e0b" className="spin" />}
-          {uploadStatus === 'success' && <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}><CheckCircle2 size={12} color="#fff" /></div>}
-          
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>
-              {uploadStatus === 'uploading' ? 'Uploading document...' : uploadStatus === 'processing' ? 'Processing with AI...' : 'Upload complete!'}
-            </span>
-            <span style={{ fontSize: "12px", color: "var(--text-3)" }}>
-              {uploadStatus === 'uploading' ? 'Saving to secure storage' : uploadStatus === 'processing' ? 'Extracting lease details' : 'Document has been queued for review'}
-            </span>
-          </div>
-        </div>
-      )}
-
-      <style dangerouslySetInnerHTML={{__html: `
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes slideUp { from { opacity: 0, transform: translateY(20px); } to { opacity: 1, transform: translateY(0); } }
-      `}} />
     </div>
   )
 }

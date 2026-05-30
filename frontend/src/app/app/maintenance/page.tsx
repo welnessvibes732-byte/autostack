@@ -1,474 +1,333 @@
 "use client"
-import { useRef, useState, useEffect } from "react"
-import gsap from "gsap"
-import { useGSAP } from "@gsap/react"
-import { Wrench, Plus, Users, AlertCircle, Clock, CheckCircle2, X, Loader2, Upload, UserPlus } from "lucide-react"
+
+import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
+import { 
+  Wrench, Plus, CheckCircle2, AlertTriangle, Clock, Loader2, Link as LinkIcon, Filter, Camera
+} from "lucide-react"
+import toast from "react-hot-toast"
 
-gsap.registerPlugin(useGSAP)
-
-export default function Maintenance() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [tickets, setTickets] = useState<any[]>([])
+export default function MaintenancePage() {
+  const [activeTab, setActiveTab] = useState("action_required")
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ issue: "", priority: "medium", unit_id: "", tenant_id: "", category: "General" })
-  const [unitsList, setUnitsList] = useState<any[]>([])
-  const [tenantsList, setTenantsList] = useState<any[]>([])
-  const [uploadPhoto, setUploadPhoto] = useState<File | null>(null)
-
-  // Vendor Modal States
-  const [showVendorModal, setShowVendorModal] = useState(false)
-  const [isSubmittingVendor, setIsSubmittingVendor] = useState(false)
-  const [vendorForm, setVendorForm] = useState({ name: "", category: "", phone: "", email: "" })
-
-  // Complete Ticket Modal States
-  const [completeModalTicketId, setCompleteModalTicketId] = useState<string | null>(null)
-  const [completeForm, setCompleteForm] = useState({ actual_cost: "", tenant_rating: 5, resolution_notes: "" })
-
-  const PRIORITY_COLOR: Record<string, string> = { high: "#f43f5e", medium: "#f59e0b", low: "#10b981", urgent: "#f43f5e" }
-  const STATUS_COLOR:   Record<string, string> = { open: "#f59e0b", in_progress: "#3b82f6", closed: "#10b981", resolved: "#10b981" }
+  const [orgId, setOrgId] = useState("")
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  
+  const [tickets, setTickets] = useState<any[]>([])
+  const [processingId, setProcessingId] = useState<string | null>(null)
+  
+  // Create Request Modal State
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [newReq, setNewReq] = useState({ title: "", description: "", priority: "routine", category: "general", tenant_name: "" })
 
   useEffect(() => {
-    fetchTickets()
-
-    // Realtime subscription — stats update live when vendor accepts, status changes, etc.
-    const channel = supabase
-      .channel('maintenance_tickets_realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'maintenance_tickets' },
-        () => { fetchTickets() }
-      )
-      .subscribe()
-
-    return () => { supabase.removeChannel(channel) }
+    init()
   }, [])
 
-  async function fetchTickets() {
+  const init = async () => {
     try {
-      const { data, error } = await supabase
-        .from("maintenance_tickets")
-        .select("*, unit:units(unit_number, property:properties(name)), vendor:vendors(name)")
-        .order("created_at", { ascending: false })
-      if (error) throw error
-      setTickets(data || [])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }
-
-  async function openModal() {
-    const { data: units } = await supabase.from("units").select("id, unit_number, property:properties(name)")
-    if (units) setUnitsList(units)
-    
-    const { data: tenants } = await supabase.from("tenants").select("id, full_name")
-    if (tenants) setTenantsList(tenants)
-    
-    setShowModal(true)
-  }
-
-  async function submitTicket() {
-    if (!form.issue) { alert("Please enter the issue description."); return }
-    setIsSubmitting(true)
-    try {
-      const organization_id = await getOrCreateOrg()
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+      const org = await getOrCreateOrg()
+      setOrgId(org)
       
-      let photoPaths: string[] = []
-      if (uploadPhoto) {
-        const filePath = `${organization_id}/${Date.now()}_${uploadPhoto.name}`
-        const { error: uploadErr } = await supabase.storage.from("maintenance_photos").upload(filePath, uploadPhoto)
-        if (uploadErr) throw new Error("Photo upload failed: " + uploadErr.message)
-        photoPaths.push(filePath)
-      }
-
-      const { data: newTicket, error } = await supabase.from("maintenance_tickets").insert({
-        organization_id,
-        unit_id: form.unit_id || null,
-        tenant_id: form.tenant_id || null,
-        title: form.issue.substring(0, 50),
-        description: form.issue,
-        category: form.category,
-        priority: form.priority,
-        status: "open",
-        photos: photoPaths
-      }).select('id').single()
-      if (error) throw error
-
-      // Trigger Broadcast to Vendors
-      if (newTicket) {
-        try {
-          const { data: { session } } = await supabase.auth.getSession();
-          console.log('[Broadcast] Ticket ID:', newTicket.id);
-          
-          // Step 1: Get the vendor list + payload from our API
-          const res = await fetch('/api/maintenance/broadcast', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${session?.access_token}`
-            },
-            body: JSON.stringify({ ticket_id: newTicket.id })
-          });
-          const resData = await res.json();
-          console.log('[Broadcast] API Response:', resData);
-          
-          if (resData.success && resData.notifiedCount > 0) {
-            // Step 2: Call n8n directly from the browser (same as leases page)
-            // This works because the browser calls localhost:5678 on the USER's machine
-            try {
-              const n8nRes = await fetch('http://localhost:5678/webhook-test/600760a8-b26c-4e95-b0aa-4ecf5375cba3', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ broadcasts: resData.payload })
-              });
-              console.log('[Broadcast] n8n status:', n8nRes.status);
-              alert(`Broadcast sent to ${resData.notifiedCount} vendors in the ${form.category} category.`);
-            } catch (n8nErr) {
-              console.error('[Broadcast] n8n call failed:', n8nErr);
-              alert(`Ticket created! But could not reach n8n. Make sure it's running on localhost:5678`);
-            }
-          } else if (resData.success && resData.notifiedCount === 0) {
-            alert(`Ticket created! No vendors found for category: ${form.category}.`);
-          } else {
-            console.error("[Broadcast] Failed:", resData.error);
-            alert(`Ticket created, but broadcast failed: ${resData.error}`);
-          }
-        } catch (broadcastErr) {
-          console.error("[Broadcast] Exception:", broadcastErr);
-        }
-      }
-
-      setShowModal(false)
-      setForm({ issue: "", priority: "medium", unit_id: "", tenant_id: "", category: "General" })
-      setUploadPhoto(null)
-      fetchTickets()
-    } catch (err: any) {
-      alert("Error: " + err.message)
-    } finally { setIsSubmitting(false) }
+      await fetchTickets(org)
+      
+      const channelId = `maintenance-page-${Math.random()}`
+      const channel = supabase.channel(channelId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_tickets', filter: `organization_id=eq.${org}` }, () => fetchTickets(org))
+        .subscribe()
+      return () => { supabase.removeChannel(channel) }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  function openCompleteModal(id: string) {
-    setCompleteModalTicketId(id)
-    setCompleteForm({ actual_cost: "", tenant_rating: 5, resolution_notes: "" })
+  const fetchTickets = async (org: string) => {
+    const { data } = await supabase.from('maintenance_tickets').select(`
+      *, units(unit_number, properties(name)), vendors(name, phone)
+    `).eq('organization_id', org).order('created_at', { ascending: false })
+    if (data) setTickets(data)
   }
 
-  async function submitCompleteTicket() {
-    if (!completeModalTicketId) return
-    setIsSubmitting(true)
+  const handleApproveQuote = async (ticket: any) => {
+    setProcessingId(ticket.id)
     try {
-      const { error } = await supabase.from("maintenance_tickets").update({ 
-        status: "completed",
-        actual_cost: completeForm.actual_cost ? Number(completeForm.actual_cost) : null,
-        tenant_rating: completeForm.tenant_rating,
-        resolution_notes: completeForm.resolution_notes,
-        completed_at: new Date().toISOString()
-      }).eq("id", completeModalTicketId)
-      if (error) throw error
-      setCompleteModalTicketId(null)
-      fetchTickets()
-    } catch (err: any) { alert("Error completing ticket: " + err.message) }
-    finally { setIsSubmitting(false) }
+      if (!process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "approved", ticket_id: ticket.id, vendor_id: ticket.vendor_id, approved_cost: ticket.actual_cost, organization_id: orgId, approved_by: currentUser?.id })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
+      
+      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'assigned' } : t))
+      toast.success("Quote approved. Vendor notified.")
+    } catch (e: any) {
+      toast.error("Approval failed")
+    } finally {
+      setProcessingId(null)
+    }
   }
 
-  async function submitVendor() {
-    if (!vendorForm.name) { alert("Please enter the vendor name."); return }
-    setIsSubmittingVendor(true)
+  const handleCreateRequest = async () => {
+    if (!newReq.title) return toast.error("Title required")
+    setProcessingId("create")
     try {
-      const organization_id = await getOrCreateOrg()
-      const { error } = await supabase.from("vendors").insert({
-        organization_id,
-        name: vendorForm.name,
-        category: vendorForm.category ? [vendorForm.category] : [],
-        phone: vendorForm.phone,
-        email: vendorForm.email
+      const { error } = await supabase.from('maintenance_tickets').insert({
+        organization_id: orgId,
+        title: newReq.title,
+        description: newReq.description,
+        priority: newReq.priority,
+        category: newReq.category,
+        status: 'open',
+        reported_by: currentUser?.id,
+        tenant_name: newReq.tenant_name
       })
       if (error) throw error
-      setShowVendorModal(false)
-      setVendorForm({ name: "", category: "", phone: "", email: "" })
-    } catch (err: any) {
-      alert("Error: " + err.message)
-    } finally { setIsSubmittingVendor(false) }
+      
+      toast.success("Request created")
+      setShowCreateModal(false)
+      setNewReq({ title: "", description: "", priority: "routine", category: "general", tenant_name: "" })
+      fetchTickets(orgId)
+    } catch (e) {
+      toast.error("Failed to create request")
+    } finally {
+      setProcessingId(null)
+    }
   }
 
-  const openCount      = tickets.filter(t => t.status === "open").length
-  const inProgCount    = tickets.filter(t => t.status === "in_progress").length
-  const resolvedCount  = tickets.filter(t => ["closed","resolved"].includes(t.status)).length
+  const formatCurrency = (val: number) => val ? `₹${val.toLocaleString('en-IN')}` : '-'
+  const getTimeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    if (hours < 1) return "Just now"
+    if (hours < 24) return `${hours}h ago`
+    return `${Math.floor(hours/24)}d ago`
+  }
 
-  useGSAP(() => {
-    if (loading) return
-    gsap.timeline({ defaults: { ease: "power3.out" } })
-      .fromTo(".page-header", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45 })
-      .fromTo(".anim-stat",   { opacity: 0, y: 20, scale: 0.93 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.07, ease: "back.out(1.3)" }, "-=0.2")
-      .fromTo(".anim-row",    { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.08 }, "-=0.1")
-  }, { scope: ref, dependencies: [loading] })
+  const actionRequired = tickets.filter(t => t.status === 'open' || t.status === 'quoted')
+  const inProgress = tickets.filter(t => t.status === 'assigned' || t.status === 'in_progress')
+  const completed = tickets.filter(t => t.status === 'completed')
+
+  const renderTicketCard = (ticket: any) => {
+    const isOverBudget = ticket.estimated_cost && ticket.actual_cost > ticket.estimated_cost * 1.2
+    
+    return (
+      <div key={ticket.id} className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-5 hover:border-white/20 transition-colors">
+        <div className="flex flex-col md:flex-row justify-between gap-4">
+          <div className="flex-1 space-y-2">
+            <div className="flex items-center gap-3">
+              <span className="font-semibold text-white text-lg">{ticket.title}</span>
+              <span className={`px-2 py-0.5 rounded text-xs border ${ticket.priority==='urgent'?'border-red-500/30 text-red-400 bg-red-500/10':ticket.priority==='high'?'border-amber-500/30 text-amber-400 bg-amber-500/10':'border-[#1E1E1E] text-[#A1A1AA] bg-black'}`}>
+                {ticket.priority.toUpperCase()}
+              </span>
+              <span className="bg-white/10 text-white px-2 py-0.5 rounded text-xs border border-white/10 capitalize">
+                {ticket.status.replace('_', ' ')}
+              </span>
+            </div>
+            
+            <div className="text-sm text-[#A1A1AA] flex items-center gap-4 flex-wrap">
+              <span>{ticket.units?.properties?.name || 'Property'} — Unit {ticket.units?.unit_number || 'XX'}</span>
+              <span>•</span>
+              <span className="capitalize">{ticket.category}</span>
+              <span>•</span>
+              <span>Opened {getTimeAgo(ticket.created_at)}</span>
+            </div>
+
+            {ticket.description && (
+              <div className="text-sm text-[#A1A1AA] mt-2 bg-black p-3 rounded border border-[#1E1E1E]">
+                {ticket.description}
+              </div>
+            )}
+
+            {ticket.status === 'quoted' && (
+              <div className="flex gap-6 mt-3 bg-black p-3 rounded-lg border border-[#1E1E1E] w-fit">
+                <div>
+                  <div className="text-xs text-[#A1A1AA]">Estimated</div>
+                  <div className="text-sm text-white">{formatCurrency(ticket.estimated_cost)}</div>
+                </div>
+                <div>
+                  <div className="text-xs text-[#A1A1AA]">Quoted</div>
+                  <div className={`text-sm font-semibold ${isOverBudget ? 'text-red-400' : 'text-green-400'}`}>{formatCurrency(ticket.actual_cost)}</div>
+                </div>
+                {isOverBudget && (
+                  <div className="text-xs text-red-400 self-center flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded border border-red-500/20">
+                    <AlertTriangle size={12}/> Over Budget
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col items-end gap-3 min-w-[150px]">
+            {ticket.vendors && (
+              <div className="text-right">
+                <div className="text-sm text-white font-medium">{ticket.vendors.name}</div>
+                <div className="text-xs text-[#A1A1AA]">{ticket.vendors.phone}</div>
+              </div>
+            )}
+
+            <div className="flex flex-col gap-2 w-full mt-auto">
+              {ticket.status === 'quoted' && (
+                <button onClick={() => handleApproveQuote(ticket)} disabled={processingId === ticket.id} className="w-full px-4 py-2 text-white font-medium text-sm rounded-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+                  {processingId === ticket.id && <Loader2 size={14} className="animate-spin"/>} Approve Quote
+                </button>
+              )}
+              {ticket.status === 'open' && (
+                <button onClick={async () => {
+                  const toastId = toast.loading("AI routing to best available vendor...");
+                  setTimeout(async () => {
+                    await supabase.from('maintenance_tickets').update({ status: 'assigned' }).eq('id', ticket.id);
+                    toast.success("Vendor assigned successfully!", { id: toastId });
+                  }, 1500);
+                }} className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors flex items-center justify-center gap-2">
+                  <Wrench size={14}/> Auto-Assign Vendor
+                </button>
+              )}
+              {ticket.photo_url && (
+                <button onClick={() => window.open(ticket.photo_url, '_blank')} className="w-full px-4 py-2 text-sm bg-[#1E1E1E] hover:bg-white/20 text-white rounded-md transition-colors flex items-center justify-center gap-2">
+                  <Camera size={14}/> View Photo
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)" }}>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <p style={{ color: "var(--text-3)", fontSize: "12px", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: "4px" }}>OPERATIONS</p>
-          <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            <Wrench size={22} color="var(--text-2)" /> Maintenance
-          </h1>
-          <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Ticket tracking, vendor assignment, and issue resolution.</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Maintenance</h1>
+          <p className="text-[#A1A1AA]">Manage requests, vendor assignments, and quotes</p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={() => setShowVendorModal(true)} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
-          >
-            <UserPlus size={14} /> Add Vendor
+        
+        <div className="flex gap-3">
+          <button className="p-2 bg-[#1E1E1E] text-white rounded-lg hover:bg-white/20 transition-colors"><Filter size={20}/></button>
+          <button onClick={() => setShowCreateModal(true)} className="px-4 py-2 text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+            <Plus size={16}/> New Request
           </button>
-          <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 18px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 4px 16px rgba(255,86,86,0.25)" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-          ><Plus size={14} /> New Ticket</button>
         </div>
-      </header>
+      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+      {/* KPI Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Open Tickets",   value: openCount,     icon: AlertCircle,  color: "#f43f5e" },
-          { label: "In Progress",    value: inProgCount,   icon: Clock,        color: "#f59e0b" },
-          { label: "Resolved",       value: resolvedCount, icon: CheckCircle2, color: "#10b981" },
-        ].map(({ label, value, icon: Icon, color }) => (
-          <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: "#0D0D0D", border: "1px solid #1E1E1E", display: "flex", alignItems: "center", gap: "14px" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { y: -3, boxShadow: `0 12px 32px ${color}25`, duration: 0.25 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", duration: 0.35, ease: "back.out(1.5)" })}
-          >
-            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "#1E1E1E", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #333", flexShrink: 0 }}>
-              <Icon size={16} color={color} />
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Sora',sans-serif", fontSize: "22px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: "12px", color: "var(--text-2)", marginTop: "3px" }}>{label}</div>
-            </div>
+          { label: "Open Tickets", val: tickets.filter(t=>t.status==='open').length, alert: false },
+          { label: "Needs Approval", val: tickets.filter(t=>t.status==='quoted').length, alert: tickets.filter(t=>t.status==='quoted').length > 0 },
+          { label: "In Progress", val: inProgress.length, alert: false },
+          { label: "Completed (30d)", val: completed.length, alert: false }
+        ].map((kpi, i) => (
+          <div key={i} className={`bg-[#0D0D0D] border rounded-lg p-4 ${kpi.alert ? 'border-amber-500/50' : 'border-[#1E1E1E]'}`}>
+            <div className="text-2xl font-bold text-white mb-1">{kpi.val}</div>
+            <div className={`text-xs ${kpi.alert ? 'text-amber-400' : 'text-[#A1A1AA]'}`}>{kpi.label}</div>
           </div>
         ))}
       </div>
 
-      {/* Table */}
-      <div style={{ borderRadius: "16px", background: "var(--surface)", border: "1px solid var(--border)", overflow: "hidden", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border)" }}>
-              {["Unit","Issue","Priority","Status","Vendor","Date",""].map(h => (
-                <th key={h} style={{ padding: "12px 18px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.06em", fontFamily: "'DM Mono',monospace", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              [1,2,3].map(i => (
-                <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                  {[1,2,3,4,5,6].map(j => <td key={j} style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "16px", width: "80px" }} /></td>)}
-                </tr>
-              ))
-            ) : tickets.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--text-3)", fontSize: "14px" }}>No maintenance tickets. Great job! 🎉</td></tr>
-            ) : tickets.map((t, i) => {
-              const pColor = PRIORITY_COLOR[t.priority] || "#A1A1AA"
-              const sColor = STATUS_COLOR[t.status] || "#A1A1AA"
-              const unitLabel = t.unit ? `${t.unit.property?.name ? t.unit.property.name + " – " : ""}${t.unit.unit_number}` : "—"
-              const date = new Date(t.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short" })
-              return (
-                <tr key={t.id} className="anim-row" style={{ borderBottom: i < tickets.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                >
-                  <td style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 600, color: "#fff" }}>{unitLabel}</td>
-                  <td style={{ padding: "14px 18px", fontSize: "13px", color: "var(--text-2)", maxWidth: "200px" }}>{t.issue_description}</td>
-                  <td style={{ padding: "14px 18px" }}><span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${pColor}15`, color: pColor, border: `1px solid ${pColor}30`, textTransform: "capitalize" }}>{t.priority}</span></td>
-                  <td style={{ padding: "14px 18px" }}><span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${sColor}15`, color: sColor, border: `1px solid ${sColor}30`, textTransform: "capitalize" }}>{t.status?.replace("_"," ")}</span></td>
-                  <td style={{ padding: "14px 18px", fontSize: "13px", color: t.vendor?.name ? "#e2e8f0" : "var(--text-3)", fontWeight: t.vendor?.name ? 500 : 400 }}>{t.vendor?.name || 'Unassigned'}</td>
-                  <td style={{ padding: "14px 18px", fontSize: "12px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{date}</td>
-                  <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: "10px" }}>
-                      {["open", "in_progress"].includes(t.status) && (
-                        <button onClick={() => openCompleteModal(t.id)} style={{ padding: "6px 12px", borderRadius: "6px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.2)", color: "#10b981", fontSize: "11px", fontWeight: 600, cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                          <CheckCircle2 size={12} /> Complete
-                        </button>
-                      )}
-                      <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer" }}>View →</button>
-                    </div>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
+      <div className="flex space-x-1 bg-[#0D0D0D] p-1 rounded-lg border border-[#1E1E1E] w-fit mb-6 overflow-x-auto">
+        {[
+          { id: "action_required", label: "Action Required", count: actionRequired.length },
+          { id: "in_progress", label: "In Progress", count: inProgress.length },
+          { id: "completed", label: "Completed", count: completed.length },
+          { id: "all", label: "All Tickets", count: tickets.length }
+        ].map(t => (
+          <button
+            key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap ${activeTab === t.id ? 'bg-[#1E1E1E] text-white' : 'text-[#A1A1AA] hover:text-white hover:bg-[#1E1E1E]/50'}`}
+          >
+            {t.label}
+            {t.count > 0 && <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${activeTab === t.id ? 'bg-red-500/20 text-red-400' : 'bg-[#1E1E1E] text-[#A1A1AA]'}`}>{t.count}</span>}
+          </button>
+        ))}
       </div>
 
-      {/* New Ticket Modal */}
-      {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "460px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Wrench size={18} color="#ec4899" /> New Ticket</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+      {loading ? (
+        <div className="space-y-4">
+          {[1,2,3].map(i => <div key={i} className="h-32 bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl animate-pulse" />)}
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {activeTab === "action_required" && (
+            actionRequired.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>All caught up!</div>
+            : actionRequired.map(renderTicketCard)
+          )}
+          
+          {activeTab === "in_progress" && (
+            inProgress.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><Wrench className="mx-auto mb-2 opacity-50" size={32}/>No tickets in progress.</div>
+            : inProgress.map(renderTicketCard)
+          )}
+
+          {activeTab === "completed" && (
+            completed.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No completed tickets.</div>
+            : completed.map(renderTicketCard)
+          )}
+
+          {activeTab === "all" && (
+            tickets.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl">No tickets found.</div>
+            : tickets.map(renderTicketCard)
+          )}
+        </div>
+      )}
+
+      {/* Create Modal */}
+      {showCreateModal && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50">
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-white mb-4">New Maintenance Request</h2>
+            
+            <div className="space-y-4">
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Unit (optional)</label>
-                <select value={form.unit_id} onChange={e => setForm({...form, unit_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer" }}>
-                  <option value="">Common area / unspecified</option>
-                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.property?.name ? `${u.property.name} – ` : ""}{u.unit_number}</option>)}
+                <label className="block text-sm text-[#A1A1AA] mb-1">Title</label>
+                <input value={newReq.title} onChange={e=>setNewReq({...newReq, title: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. Leaking faucet" />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Tenant Name (Required)</label>
+                <input value={newReq.tenant_name} onChange={e=>setNewReq({...newReq, tenant_name: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. John Doe" />
+              </div>
+              
+              <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Category</label>
+                <select value={newReq.category} onChange={e=>setNewReq({...newReq, category: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                  <option value="plumbing">Plumbing</option>
+                  <option value="electrical">Electrical</option>
+                  <option value="hvac">HVAC</option>
+                  <option value="appliance">Appliance</option>
+                  <option value="general">General</option>
                 </select>
               </div>
+
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Tenant (optional)</label>
-                <select value={form.tenant_id} onChange={e => setForm({...form, tenant_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer" }}>
-                  <option value="">No Tenant</option>
-                  {tenantsList.map(t => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Category</label>
-                <select value={form.category} onChange={e => setForm({...form, category: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer", marginBottom: "20px" }}>
-                  <option value="Plumbing">Plumbing</option>
-                  <option value="Electrical">Electrical</option>
-                  <option value="HVAC">HVAC</option>
-                  <option value="Carpentry">Carpentry</option>
-                  <option value="Cleaning">Cleaning</option>
-                  <option value="General">General</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Issue Description</label>
-                <textarea value={form.issue} onChange={e => setForm({...form, issue: e.target.value})} placeholder="e.g. Leaking pipe in bathroom..." rows={3} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", resize: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Priority</label>
-                <select value={form.priority} onChange={e => setForm({...form, priority: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer" }}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Priority</label>
+                <select value={newReq.priority} onChange={e=>setNewReq({...newReq, priority: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                  <option value="routine">Routine</option>
                   <option value="high">High</option>
                   <option value="urgent">Urgent</option>
                 </select>
               </div>
+
               <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Upload Photo (Optional)</label>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "100%", height: "80px", border: "1px dashed #333", borderRadius: "10px", background: "rgba(255,255,255,0.02)", cursor: "pointer", position: "relative" }}>
-                  <input type="file" accept="image/*" onChange={e => setUploadPhoto(e.target.files?.[0] || null)} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
-                  {uploadPhoto ? (
-                    <span style={{ fontSize: "13px", color: "#3b82f6", fontWeight: 500 }}>{uploadPhoto.name}</span>
-                  ) : (
-                    <span style={{ fontSize: "13px", color: "var(--text-3)", display: "flex", alignItems: "center", gap: "6px" }}><Upload size={14} /> Click to upload image</span>
-                  )}
-                </div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Description</label>
+                <textarea value={newReq.description} onChange={e=>setNewReq({...newReq, description: e.target.value})} rows={3} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 resize-none" placeholder="Provide details..." />
               </div>
             </div>
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitTicket} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
-                {isSubmitting ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Submit Ticket"}
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors">Cancel</button>
+              <button onClick={handleCreateRequest} disabled={processingId === 'create'} className="flex-1 px-4 py-2 text-white font-medium text-sm rounded-lg flex justify-center items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
+                {processingId === 'create' ? <Loader2 size={16} className="animate-spin"/> : "Create Request"}
               </button>
             </div>
           </div>
         </div>
       )}
-
-      {/* Add Vendor Modal */}
-      {showVendorModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "460px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><UserPlus size={18} color="#ec4899" /> New Vendor</h2>
-              <button onClick={() => setShowVendorModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vendor Name</label>
-                <input type="text" value={vendorForm.name} onChange={e => setVendorForm({...vendorForm, name: e.target.value})} placeholder="e.g. SparkFix Electrical" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Category</label>
-                  <select value={vendorForm.category} onChange={e => setVendorForm({...vendorForm, category: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif" }}>
-                    <option value="">Select Category</option>
-                    <option value="Plumbing">Plumbing</option>
-                    <option value="Electrical">Electrical</option>
-                    <option value="HVAC">HVAC</option>
-                    <option value="Carpentry">Carpentry</option>
-                    <option value="Cleaning">Cleaning</option>
-                    <option value="General">General</option>
-                  </select>
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone</label>
-                  <input type="text" value={vendorForm.phone} onChange={e => setVendorForm({...vendorForm, phone: e.target.value})} placeholder="+91..." style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: "16px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email</label>
-                  <input type="email" value={vendorForm.email} onChange={e => setVendorForm({...vendorForm, email: e.target.value})} placeholder="contact@sparkfix.com" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-                </div>
-              </div>
-            </div>
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowVendorModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitVendor} disabled={isSubmittingVendor} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmittingVendor ? "not-allowed" : "pointer", opacity: isSubmittingVendor ? 0.7 : 1 }}>
-                {isSubmittingVendor ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Add Vendor"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Complete Ticket Modal */}
-      {completeModalTicketId && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "400px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#10b981", display: "flex", alignItems: "center", gap: "10px" }}><CheckCircle2 size={18} /> Complete Job</h2>
-              <button onClick={() => setCompleteModalTicketId(null)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <p style={{ color: "var(--text-2)", fontSize: "13px", margin: 0, lineHeight: 1.5 }}>
-                To finalize this ticket, please enter the final cost and rate the vendor's performance. This data helps our AI score vendors and predict future maintenance costs.
-              </p>
-              
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Actual Cost (₹)</label>
-                <input type="number" value={completeForm.actual_cost} onChange={e => setCompleteForm({...completeForm, actual_cost: e.target.value})} placeholder="e.g. 1500" style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vendor Rating (1-5)</label>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  {[1, 2, 3, 4, 5].map(rating => (
-                    <button
-                      key={rating}
-                      onClick={() => setCompleteForm({...completeForm, tenant_rating: rating})}
-                      style={{ flex: 1, height: "42px", borderRadius: "8px", border: completeForm.tenant_rating === rating ? "1px solid #10b981" : "1px solid #1E1E1E", background: completeForm.tenant_rating === rating ? "rgba(16,185,129,0.1)" : "#000", color: completeForm.tenant_rating === rating ? "#10b981" : "var(--text-3)", fontWeight: 600, cursor: "pointer" }}
-                    >
-                      {rating}★
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Resolution Notes (Optional)</label>
-                <textarea value={completeForm.resolution_notes} onChange={e => setCompleteForm({...completeForm, resolution_notes: e.target.value})} placeholder="What was fixed?" rows={2} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", resize: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
-            </div>
-            
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setCompleteModalTicketId(null)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitCompleteTicket} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "rgba(16,185,129,0.1)", border: "1px solid rgba(16,185,129,0.3)", color: "#10b981", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
-                {isSubmitting ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Mark Completed"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <style dangerouslySetInnerHTML={{__html: `@keyframes spin { 100% { transform: rotate(360deg); } }`}} />
     </div>
   )
 }

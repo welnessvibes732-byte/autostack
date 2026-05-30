@@ -9,8 +9,10 @@ import { useGSAP } from "@gsap/react"
 import {
   LayoutDashboard, Building2, KeySquare, Users, UserPlus, Wrench,
   FileText, Search, BarChart3, Receipt, BellRing, Link2, Settings, LogOut,
-  ChevronLeft, Menu, X
+  ChevronLeft, Menu, X, CheckSquare
 } from "lucide-react"
+
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
@@ -25,6 +27,7 @@ const navItems = [
   { name: "AI Search",    href: "/app/search",       icon: Search },
   { name: "Analytics",    href: "/app/analytics",    icon: BarChart3 },
   { name: "Invoices",     href: "/app/invoices",     icon: Receipt },
+  { name: "Approvals",    href: "/app/approvals",    icon: CheckSquare },
   { name: "Alerts",       href: "/app/alerts",       icon: BellRing },
   { name: "Integrations", href: "/app/integrations", icon: Link2 },
   { name: "Settings",     href: "/app/settings",     icon: Settings },
@@ -36,14 +39,43 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [loading,     setLoading]     = useState(true)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [isMobileOpen, setIsMobileOpen] = useState(false)
+  const [pendingApprovals, setPendingApprovals] = useState(0)
   const sidebarRef = useRef<HTMLElement>(null)
   const mainRef    = useRef<HTMLElement>(null)
 
   useEffect(() => {
+    let channel: any;
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (!session) router.push("/login")
-      else setLoading(false)
+      else {
+        setLoading(false)
+        const init = async () => {
+          const orgId = await getOrCreateOrg()
+          const fetchCounts = async () => {
+            const [invoiceCount, leaseCount, maintenanceCount, signoffCount] = await Promise.all([
+              supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['received', 'matched', 'flagged']),
+              supabase.from('leases').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('lease_status', 'active').lte('expiry_date', new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]).is('renewal_status', null),
+              supabase.from('maintenance_tickets').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'quoted').not('actual_cost', 'is', null),
+              supabase.from('leads').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('stage', 'pending_signoff')
+            ])
+            setPendingApprovals((invoiceCount.count || 0) + (leaseCount.count || 0) + (maintenanceCount.count || 0) + (signoffCount.count || 0))
+          }
+          await fetchCounts()
+          
+          channel = supabase
+            .channel('approvals-badge-realtime')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `organization_id=eq.${orgId}` }, fetchCounts)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_tickets', filter: `organization_id=eq.${orgId}` }, fetchCounts)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `organization_id=eq.${orgId}` }, fetchCounts)
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'leases', filter: `organization_id=eq.${orgId}` }, fetchCounts)
+            .subscribe()
+        }
+        init()
+      }
     })
+    return () => {
+      if (channel) supabase.removeChannel(channel)
+    }
   }, [router])
 
   useGSAP(() => {
@@ -212,7 +244,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                 }}
               >
                 <Icon size={15} style={{ flexShrink: 0 }} />
-                {(!isCollapsed || isMobileOpen) && <span>{item.name}</span>}
+                {(!isCollapsed || isMobileOpen) && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flex: 1, minWidth: 0 }}>
+                    <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+                    {item.name === "Approvals" && pendingApprovals > 0 && (
+                      <span style={{
+                        background: "#ef4444", color: "white", fontSize: "10px", fontWeight: "bold",
+                        padding: "2px 6px", borderRadius: "10px", marginLeft: "4px"
+                      }}>
+                        {pendingApprovals}
+                      </span>
+                    )}
+                  </div>
+                )}
               </Link>
             )
           })}

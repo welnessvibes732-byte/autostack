@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Format 3: Simple Clean Carousel</title>
+<link href="https://api.fontshare.com/v2/css?f[]=switzer@400,600,700&display=swap" rel="stylesheet">
+<style>
+    body {
+        background-color: #f0f2f5;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 40px;
+        margin: 0;
+        font-family: 'Switzer', sans-serif;
+        gap: 40px;
+    }
+    .slide {
+        width: 1080px;
+        height: 1350px;
+        background-color: #ffffff;
+        position: relative;
+        padding: 120px;
+        box-sizing: border-box;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        transform: scale(0.45);
+        transform-origin: top center;
+        margin-bottom: -700px;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+    }
+    .slide-number {
+        position: absolute;
+        top: 80px;
+        left: 120px;
+        font-size: 32px;
+        font-weight: 700;
+        color: #0066cc; /* Professional Blue */
+    }
+    .slide-content {
+        font-size: 100px;
+        font-weight: 700;
+        color: #1a202c;
+        line-height: 1.2;
+        letter-spacing: -2px;
+    }
+    .slide-subtext {
+        font-size: 50px;
+        font-weight: 400;
+        color: #4a5568;
+        margin-top: 40px;
+        line-height: 1.4;
+    }
+    .highlight-red { color: #e53e3e; }
+    .highlight-blue { color: #0066cc; }
+    
+    .footer {
+        position: absolute;
+        bottom: 80px;
+        left: 120px;
+        right: 120px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 2px solid #e2e8f0;
+        padding-top: 40px;
+    }
+    .brand {
+        font-size: 28px;
+        font-weight: 700;
+        color: #718096;
+    }
+    .swipe {
+        font-size: 28px;
+        font-weight: 600;
+        color: #a0aec0;
+    }
+</style>
+</head>
+<body>
+
+    <!-- Slide 1 -->
+    <div class="slide">
+        <div class="slide-number">01</div>
+        <div class="slide-content">The Concession Trap.</div>
+        <div class="slide-subtext">How giving away "one month free" destroys portfolio valuation.</div>
+        <div class="footer">
+            <div class="brand">NITHESH DEVARLA</div>
+            <div class="swipe">SWIPE &rarr;</div>
+        </div>
+    </div>
+
+    <!-- Slide 2 -->
+    <div class="slide">
+        <div class="slide-number">02</div>
+        <div class="slide-content">Vacancy ticks up 2%.</div>
+        <div class="slide-subtext">The leasing manager panics. They look across the street, see a competitor offering a special, and copy it.</div>
+        <div class="footer">
+            <div class="brand">NITHESH DEVARLA</div>
+            <div class="swipe">SWIPE &rarr;</div>
+        </div>
+    </div>
+
+    <!-- Slide 3 -->
+    <div class="slide">
+        <div class="slide-number">03</div>
+        <div class="slide-content">"One Month Free"</div>
+        <div class="slide-subtext">They give away $2,500 to 30 new tenants this year.<br><br>The problem? Half of them were ready to sign for a $500 deposit reduction.</div>
+        <div class="footer">
+            <div class="brand">NITHESH DEVARLA</div>
+            <div class="swipe">SWIPE &rarr;</div>
+        </div>
+    </div>
+
+    <!-- Slide 4 -->
+    <div class="slide">
+        <div class="slide-number">04</div>
+        <div class="slide-content">The Brutal Math.</div>
+        <div class="slide-subtext">
+            $75,000 total given away.<br>
+            <span class="highlight-red">$37,500 completely wasted.</span>
+        </div>
+        <div class="footer">
+            <div class="brand">NITHESH DEVARLA</div>
+            <div class="swipe">SWIPE &rarr;</div>
+        </div>
+    </div>
+
+    <!-- Slide 5 -->
+    <div class="slide">
+        <div class="slide-number">05</div>
+        <div class="slide-content">The Valuation Hit.</div>
+        <div class="slide-subtext">At a 5% Cap Rate, that $37,500 in wasted NOI just erased <strong class="highlight-red">$750,000</strong> from the building's value.</div>
+        <div class="footer">
+            <div class="brand">NITHESH DEVARLA</div>
+            <div class="swipe">SWIPE &rarr;</div>
+        </div>
+    </div>
+
+    <!-- Slide 6 -->
+    <div class="slide">
+        <div class="slide-number">06</div>
+        <div class="slide-content">Stop Guessing.</div>
+        <div class="slide-subtext">Aethera's Market Intelligence layer tells your team exactly what concessions are needed to close—and not a dollar more.<br><br><strong class="highlight-blue">Comment "YIELD" for our 2026 playbook.</strong></div>
+        <div class="footer">
+            <div class="brand">NITHESH DEVARLA</div>
+        </div>
+    </div>
+
+</body>
+</html>

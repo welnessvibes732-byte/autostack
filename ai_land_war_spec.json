@@ -1,0 +1,51 @@
+{
+  "theme": "brutalist",
+  "author": {
+    "name": "Nithesh Devarla",
+    "handle": "Aethera"
+  },
+  "slides": [
+    {
+      "type": "cover",
+      "headline": "AI is quietly stealing your land.",
+      "body": "Everyone thinks AI will save real estate. Nobody realizes it's aggressively absorbing the land supply you need to build housing.",
+      "highlight": "stealing your land",
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    },
+    {
+      "type": "content",
+      "headline": "A silent war is happening right now.",
+      "body": "A data center developer and a multifamily developer show up to the exact same 20-acre plot of land. The data center offers 3x the price in cash.",
+      "highlight": "3x the price",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\exec_staring_1779381998603.png"
+    },
+    {
+      "type": "content",
+      "headline": "The brutal math.",
+      "body": "A 400-unit apartment complex generates roughly $8M a year. A single hyperscale data center block generates $300M a year on a 15-year lease.",
+      "highlight": "$300M a year",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\financial_bleed_1779205856422.png"
+    },
+    {
+      "type": "content",
+      "headline": "It's not a fair fight.",
+      "body": "As data centers eat the land supply, housing remains permanently constrained. Which means the intrinsic value of every existing residential unit just went up.",
+      "highlight": "just went up",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\market_data_screen_1779458655346.png"
+    },
+    {
+      "type": "content",
+      "headline": "You are sitting on a goldmine.",
+      "body": "But you can't unlock that value if your operations are bleeding cash. You don't need more land to scale. You need autonomous operations.",
+      "highlight": "autonomous operations",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\live_dashboard_icon_1779640570254.png"
+    },
+    {
+      "type": "closing",
+      "headline": "The AI Land War is a massive structural tailwind.",
+      "body": "Are you positioned to capture it, or are you still approving invoices in an email thread? Switch to Aethera.",
+      "highlight": "structural tailwind",
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    }
+  ]
+}

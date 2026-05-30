@@ -1,0 +1,56 @@
+{
+  "title": "The ESG Compliance Trap",
+  "kicker": "REGULATORY TIME BOMB",
+  "author": "AETHERA",
+  "slides": [
+    {
+      "headline": "The $500,000 fine you don't even know is coming.",
+      "body": "ESG compliance is no longer a corporate PR slide. It is a regulatory time bomb. Swipe to see why.",
+      "highlight": "$500,000 fine",
+      "is_cover": true,
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    },
+    {
+      "headline": "August 10, 2026: California SB 253 forces emissions disclosures.",
+      "body": "If you manage $1B+ in assets, get the math wrong or miss the deadline, and it is a $500,000 fine per reporting year.",
+      "highlight": "August 10, 2026",
+      "callouts": ["SB 253 forces disclosures", "Scope 1 & Scope 2 carbon", "Fines start at $500,000/yr"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\esg_calendar_deadline_1779728729131.png"
+    },
+    {
+      "headline": "How most firms plan to handle compliance (The Leaf PDF Trap).",
+      "body": "Hire an $80K consultant. Hunt for utility bills lost in a former manager's inbox. Guess the numbers. Print a green leaf PDF.",
+      "highlight": "Leaf PDF Trap",
+      "callouts": ["$80,000 consultant costs", "Bills lost in ex-staff emails", "Guessing Scope 2 numbers"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\leaf_pdf_trap_1779728608464.png"
+    },
+    {
+      "headline": "The LP committing $50M who quietly backs out.",
+      "body": "Institutional investors don't want greenwashing. If your back-office cannot prove its telemetry, they won't write the check.",
+      "highlight": "quietly backs out",
+      "callouts": ["No more glossy green PDFs", "LPs demand hard telemetry", "Failing compliance = lost funds"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\nervous_presenter_icon_1779640552244.png"
+    },
+    {
+      "headline": "Aethera doesn't talk to the government.",
+      "body": "We won't buy questionable offsets or write compliance essays. We connect directly to your asset-level utility ledgers.",
+      "highlight": "doesn't talk to the government",
+      "callouts": ["No greenwashing, no bribes", "Systemic utility connections", "Auto-calculate carbon loads"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\utility_ledger_connection_1779728664701.png"
+    },
+    {
+      "headline": "When the regulator calls, you open one screen.",
+      "body": "Every utility invoice approved instantly updates your carbon ledger. Tamper-proof, auditable, and 100% verified.",
+      "highlight": "one screen",
+      "callouts": ["Live Scope 1 & 2 tracking", "Tamper-proof audit ledgers", "Instantly share with LPs"],
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\live_dashboard_icon_1779640570254.png"
+    },
+    {
+      "headline": "The era of regulatory improvisation is over.",
+      "body": "Don't let a messy back-office cost you a $50M commitment. Put your carbon telemetry on autopilot.",
+      "highlight": "regulatory improvisation",
+      "is_cover": false,
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    }
+  ]
+}

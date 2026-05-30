@@ -1,298 +1,275 @@
 "use client"
-import { useRef, useState, useEffect } from "react"
-import gsap from "gsap"
-import { useGSAP } from "@gsap/react"
-import { Receipt, Plus, FileText, AlertTriangle, CheckCircle2, X, Loader2, Upload } from "lucide-react"
+
+import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
+import { 
+  FileText, Upload, Plus, CheckCircle2, AlertTriangle, Eye, Loader2, IndianRupee, Link as LinkIcon, Wand2 
+} from "lucide-react"
+import toast from "react-hot-toast"
 
-gsap.registerPlugin(useGSAP)
-
-export default function Invoices() {
-  const ref = useRef<HTMLDivElement>(null)
-  const [invoices, setInvoices] = useState<any[]>([])
+export default function InvoicesPage() {
+  const [activeTab, setActiveTab] = useState("pending")
   const [loading, setLoading] = useState(true)
-  const [showModal, setShowModal] = useState(false)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [form, setForm] = useState({ vendor_name: "", amount: "", unit_id: "", invoice_date: new Date().toISOString().split("T")[0] })
-  const [unitsList, setUnitsList] = useState<any[]>([])
+  const [orgId, setOrgId] = useState("")
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  
+  const [invoices, setInvoices] = useState<any[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [processingId, setProcessingId] = useState<string | null>(null)
 
-  // Upload states
-  const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'processing'|'success'>('idle')
+  useEffect(() => {
+    init()
+  }, [])
 
-  const STATUS_COLOR: Record<string, string> = {
-    pending:  "#f59e0b",
-    approved: "#10b981",
-    rejected: "#f43f5e",
-    anomaly:  "#f43f5e",
-    paid:     "#3b82f6",
-  }
-
-  useEffect(() => { fetchInvoices() }, [])
-
-  async function fetchInvoices() {
+  const init = async () => {
     try {
-      const { data, error } = await supabase
-        .from("invoices")
-        .select("*, unit:units(unit_number, property:properties(name))")
-        .order("created_at", { ascending: false })
-      if (error) throw error
-      setInvoices(data || [])
-    } catch (e) { console.error(e) }
-    finally { setLoading(false) }
-  }
-
-  async function openModal() {
-    const { data } = await supabase.from("units").select("id, unit_number, property:properties(name)")
-    if (data) setUnitsList(data)
-    setShowModal(true)
-  }
-
-  async function submitInvoice() {
-    if (!form.vendor_name || !form.amount) { alert("Please enter vendor name and amount."); return }
-    setIsSubmitting(true)
-    try {
-      const organization_id = await getOrCreateOrg()
-      const { error } = await supabase.from("invoices").insert({
-        organization_id,
-        vendor_name: form.vendor_name,
-        amount: parseFloat(form.amount),
-        unit_id: form.unit_id || null,
-        invoice_date: form.invoice_date,
-        status: "pending",
-      })
-      if (error) throw error
-      setShowModal(false)
-      setForm({ vendor_name: "", amount: "", unit_id: "", invoice_date: new Date().toISOString().split("T")[0] })
-      fetchInvoices()
-    } catch (err: any) {
-      alert("Error: " + err.message)
-    } finally { setIsSubmitting(false) }
-  }
-
-  const handleFileUpload = async (file: File) => {
-    if (!file) return;
-    setUploadStatus('uploading');
-
-    try {
-      const organization_id = await getOrCreateOrg();
-      const filePath = `${organization_id}/${Date.now()}_${file.name}`;
+      setLoading(true)
+      const { data: { user } } = await supabase.auth.getUser()
+      setCurrentUser(user)
+      const org = await getOrCreateOrg()
+      setOrgId(org)
       
-      const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
-      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
-
-      setUploadStatus('processing');
-
-      const { error: dbErr } = await supabase.from('documents').insert({
-        organization_id,
-        lease_id: null,
-        file_path: filePath,
-        file_name: file.name,
-        doc_type: 'invoice',
-        authority_level: 4,
-        index_status: 'pending'
-      });
-      if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
-
-      try {
-        await fetch('http://localhost:5678/webhook-test/d093c250-b1dc-4575-a910-4f87312fb238', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: organization_id, file_name: file.name })
-        });
-      } catch(webhookErr) {
-        console.warn("Webhook failed:", webhookErr);
-      }
-
-      setUploadStatus('success');
-      setTimeout(() => setUploadStatus('idle'), 4000);
-    } catch (err: any) {
-      alert("Error: " + err.message);
-      setUploadStatus('idle');
+      await fetchInvoices(org)
+      
+      const channelId = `invoices-page-${Math.random()}`
+      const channel = supabase.channel(channelId)
+        .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `organization_id=eq.${org}` }, () => fetchInvoices(org))
+        .subscribe()
+      return () => { supabase.removeChannel(channel) }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const pendingCount  = invoices.filter(i => i.status === "pending").length
-  const anomalyCount  = invoices.filter(i => i.status === "anomaly" || i.status === "rejected").length
-  const totalAmount   = invoices.reduce((s, i) => s + Number(i.amount || 0), 0)
-  const totalStr      = totalAmount >= 100000 ? `₹${(totalAmount / 100000).toFixed(1)}L` : `₹${(totalAmount / 1000).toFixed(1)}K`
+  const fetchInvoices = async (org: string) => {
+    const { data } = await supabase.from('invoices').select(`
+      *, vendors(name), maintenance_tickets(title), properties(name)
+    `).eq('organization_id', org).order('created_at', { ascending: false })
+    if (data) setInvoices(data)
+  }
 
-  useGSAP(() => {
-    if (loading) return
-    gsap.timeline({ defaults: { ease: "power3.out" } })
-      .fromTo(".page-header", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45 })
-      .fromTo(".anim-stat",   { opacity: 0, y: 20, scale: 0.93 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, stagger: 0.07, ease: "back.out(1.3)" }, "-=0.2")
-      .fromTo(".anim-row",    { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.35, stagger: 0.09 }, "-=0.1")
-  }, { scope: ref, dependencies: [loading] })
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setIsUploading(true)
+    const toastId = toast.loading("Uploading invoice...")
+    try {
+      const filePath = `${orgId}/${Date.now()}_${file.name}`
+      
+      const { error: uploadError } = await supabase.storage.from('invoices').upload(filePath, file)
+      if (uploadError) throw uploadError
+
+      const { data: inserted, error: dbError } = await supabase.from('invoices').insert({
+        organization_id: orgId,
+        file_name: file.name,
+        file_path: filePath,
+        status: 'received',
+        total_amount: 0
+      }).select().single()
+      if (dbError) throw dbError
+
+      // Trigger Webhook if configured for document processing
+      if (process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK) {
+        fetch(process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: orgId, file_name: file.name, type: 'invoice', invoice_id: inserted.id })
+        }).catch(console.error)
+      }
+
+      toast.success("Invoice uploaded! AI is processing data.", { id: toastId })
+    } catch (err) {
+      toast.error("Upload failed", { id: toastId })
+      console.error(err)
+    } finally {
+      setIsUploading(false)
+      if (e.target) e.target.value = ""
+    }
+  }
+
+  const handleApprove = async (invoice: any) => {
+    setProcessingId(invoice.id)
+    try {
+      // 1. Immutable Ledger Check (Double Billing Prevention)
+      const vName = invoice.vendors?.name || invoice.vendor_name
+      if (vName && invoice.total_amount > 0) {
+        const { data: duplicates } = await supabase.from('invoices')
+          .select('id, created_at, status')
+          .eq('organization_id', orgId)
+          .eq('vendor_name', vName)
+          .eq('total_amount', invoice.total_amount)
+          .neq('id', invoice.id)
+          .gte('created_at', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString())
+          
+        if (duplicates && duplicates.length > 0) {
+          toast.error("Ledger Block: Possible double-billing detected. Invoice flagged.", { duration: 6000 })
+          await supabase.from('invoices').update({ is_duplicate: true }).eq('id', invoice.id)
+          fetchInvoices(orgId)
+          setProcessingId(null)
+          return
+        }
+      }
+
+      // 2. Trigger Autonomous Approval Flow
+      if (!process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
+      toast.success("Invoice approved & ledger updated")
+    } catch (e) {
+      toast.error("Approval failed")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleReject = async (invoiceId: string) => {
+    const reason = prompt("Enter reason for rejection:")
+    if (!reason) return
+    setProcessingId(invoiceId)
+    try {
+      if (!process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK) throw new Error("Webhook not configured")
+      const res = await fetch(process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: "rejected", invoice_id: invoiceId, organization_id: orgId, rejected_by: currentUser?.id, rejection_reason: reason })
+      })
+      if (!res.ok) throw new Error("Webhook failed")
+      toast.success("Invoice rejected")
+    } catch (e) {
+      toast.error("Rejection failed")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const formatCurrency = (val: number) => val ? `₹${val.toLocaleString('en-IN')}` : '-'
+  const getTimeAgo = (dateStr: string) => {
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    if (hours < 1) return "Just now"
+    if (hours < 24) return `${hours}h ago`
+    return `${Math.floor(hours/24)}d ago`
+  }
+
+  const processingInvoices = invoices.filter(i => i.status === 'received')
+  const pendingInvoices = invoices.filter(i => ['matched', 'flagged'].includes(i.status))
+  const archivedInvoices = invoices.filter(i => ['approved', 'rejected', 'paid'].includes(i.status))
+
+  const renderInvoiceCard = (invoice: any, actions: boolean) => (
+    <div key={invoice.id} className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-5 hover:border-white/20 transition-colors">
+      <div className="flex flex-col md:flex-row justify-between gap-4">
+        <div className="flex-1 space-y-2">
+          <div className="flex items-center gap-3">
+            <span className="font-semibold text-white text-lg">{invoice.vendors?.name || invoice.vendor_name || 'Processing...'}</span>
+            <span className={`px-2 py-0.5 rounded text-xs border ${invoice.status==='received'?'border-blue-500/20 text-blue-400 bg-blue-500/10':invoice.status==='matched'?'border-green-500/20 text-green-400 bg-green-500/10':invoice.status==='flagged'?'border-red-500/20 text-red-400 bg-red-500/10':'border-[#1E1E1E] text-[#A1A1AA] bg-black'}`}>
+              {invoice.status.toUpperCase()}
+            </span>
+          </div>
+          
+          <div className="text-sm text-[#A1A1AA] flex items-center gap-4 flex-wrap">
+            <span>Inv #{invoice.invoice_number || '---'}</span>
+            <span>•</span>
+            <span>{invoice.invoice_date ? new Date(invoice.invoice_date).toLocaleDateString() : '---'}</span>
+            {invoice.properties?.name && <><span>•</span><span>{invoice.properties.name}</span></>}
+            {invoice.maintenance_tickets?.title && (
+              <><span>•</span><span className="text-blue-400 flex items-center gap-1"><LinkIcon size={12}/> {invoice.maintenance_tickets.title}</span></>
+            )}
+          </div>
+
+          {(invoice.is_anomaly || invoice.is_duplicate) && (
+            <div className="mt-2 text-sm space-y-1">
+              {invoice.is_anomaly && <div className="text-red-400 flex items-center gap-1 bg-red-500/10 px-2 py-1 rounded w-fit"><AlertTriangle size={14}/> {invoice.anomaly_reason}</div>}
+              {invoice.is_duplicate && <div className="text-orange-400 font-bold flex items-center gap-1 bg-orange-500/10 px-3 py-1.5 rounded w-fit"><AlertTriangle size={16}/> Immutable Ledger Block: Duplicate invoice amount detected from this vendor in the last 60 days.</div>}
+            </div>
+          )}
+        </div>
+
+        <div className="flex flex-col items-end justify-between gap-3 min-w-[150px]">
+          <div className="text-right">
+            <div className="text-2xl font-bold text-white">{formatCurrency(invoice.total_amount)}</div>
+            <div className="text-xs text-[#A1A1AA] mt-1">{getTimeAgo(invoice.created_at)}</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {invoice.file_path && (
+              <button className="p-2 text-[#A1A1AA] hover:text-white bg-[#1E1E1E] hover:bg-white/20 rounded-md transition-colors"
+                onClick={() => window.open(supabase.storage.from('invoices').getPublicUrl(invoice.file_path).data.publicUrl, '_blank')}
+                title="View Document"
+              ><Eye size={16}/></button>
+            )}
+            {actions && (
+              <>
+                <button onClick={() => handleReject(invoice.id)} disabled={processingId === invoice.id} className="px-3 py-1.5 text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md transition-colors disabled:opacity-50">Reject</button>
+                <button onClick={() => handleApprove(invoice)} disabled={processingId === invoice.id || invoice.is_duplicate} className="px-4 py-1.5 text-black font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #00F0FF, #0047FF)", border: "none" }}>
+                  {processingId === invoice.id && <Loader2 size={14} className="animate-spin text-white"/>} Approve
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 
   return (
-    <div ref={ref} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-      <header className="page-header flex flex-col sm:flex-row items-start sm:items-end justify-between gap-4" style={{ paddingBottom: "20px", borderBottom: "1px solid var(--border)" }}>
+    <div className="max-w-6xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <p style={{ color: "var(--text-3)", fontSize: "12px", fontFamily: "'DM Mono',monospace", letterSpacing: "0.06em", marginBottom: "4px" }}>FINANCE</p>
-          <h1 style={{ fontFamily: "'Sora',sans-serif", fontSize: "26px", fontWeight: 700, color: "#fff", letterSpacing: "-0.03em", margin: 0, display: "flex", alignItems: "center", gap: "10px" }}>
-            <Receipt size={22} color="var(--text-2)" /> Invoices
-          </h1>
-          <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Vendor invoices and payment tracking.</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Invoices <span className="text-xs ml-2 bg-blue-500/10 text-blue-400 px-2 py-1 rounded font-mono border border-blue-500/20">AUTONOMOUS_MODE</span></h1>
+          <p className="text-[#A1A1AA]">AI-powered immutable ledger and duplicate prevention</p>
         </div>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
-          >
-            <input type="file" hidden onChange={(e) => { if(e.target.files && e.target.files[0]) handleFileUpload(e.target.files[0]) }} />
-            <Upload size={14} /> Upload Invoice PDF
-          </label>
-          <button onClick={openModal} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-          ><Plus size={14} /> Add Invoice</button>
-        </div>
-      </header>
+        
+        <label className="px-5 py-2.5 text-black font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 cursor-pointer transition-opacity relative overflow-hidden group" style={{ background: "linear-gradient(to right, #00F0FF, #0047FF)", border: "none" }}>
+          <div className="absolute top-0 left-[-100%] w-full h-full bg-white/20 skew-x-12 group-hover:animate-[sweep_1s_ease-in-out_infinite]" />
+          {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>}
+          {isUploading ? "Autonomous Engine Running..." : "Engage Autonomous Router"}
+          <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
+        </label>
+      </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: "14px" }}>
+      <div className="flex space-x-1 bg-[#0D0D0D] p-1 rounded-lg border border-[#1E1E1E] w-fit mb-6">
         {[
-          { label: "Pending Approval", value: pendingCount, color: "#f59e0b", icon: Receipt },
-          { label: "Anomalies Found",  value: anomalyCount, color: "#f43f5e", icon: AlertTriangle },
-          { label: "Total (All Time)", value: totalStr,     color: "#10b981", icon: CheckCircle2 },
-        ].map(({ label, value, color, icon: Icon }) => (
-          <div key={label} className="anim-stat" style={{ padding: "18px 20px", borderRadius: "14px", background: "#0D0D0D", border: "1px solid #1E1E1E", display: "flex", alignItems: "center", gap: "14px", cursor: "default" }}
-            onMouseEnter={e => gsap.to(e.currentTarget, { y: -3, boxShadow: `0 12px 30px ${color}25`, duration: 0.25 })}
-            onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", duration: 0.35, ease: "back.out(1.5)" })}
+          { id: "pending", label: "Pending Approval", count: pendingInvoices.length },
+          { id: "processing", label: "Processing (AI)", count: processingInvoices.length },
+          { id: "archived", label: "Paid / Archived", count: archivedInvoices.length }
+        ].map(t => (
+          <button
+            key={t.id} onClick={() => setActiveTab(t.id)}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${activeTab === t.id ? 'bg-[#1E1E1E] text-white' : 'text-[#A1A1AA] hover:text-white hover:bg-[#1E1E1E]/50'}`}
           >
-            <div style={{ width: "38px", height: "38px", borderRadius: "10px", background: "#1E1E1E", display: "flex", alignItems: "center", justifyContent: "center", border: "1px solid #333", flexShrink: 0 }}>
-              <Icon size={16} color={color} />
-            </div>
-            <div>
-              <div style={{ fontFamily: "'Sora',sans-serif", fontSize: "22px", fontWeight: 700, color: "#fff", letterSpacing: "-0.02em", lineHeight: 1 }}>{value}</div>
-              <div style={{ fontSize: "12px", color: "var(--text-2)", marginTop: "3px" }}>{label}</div>
-            </div>
-          </div>
+            {t.label}
+            {t.count > 0 && <span className={`ml-2 px-2 py-0.5 rounded-full text-xs ${activeTab === t.id ? 'bg-white/10' : 'bg-[#1E1E1E]'}`}>{t.count}</span>}
+          </button>
         ))}
       </div>
 
-      {/* Filter */}
-      <div style={{ display: "flex", gap: "10px" }}>
-        {["All", "Pending", "Approved", "Anomaly"].map((f, i) => (
-          <button key={f} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: i === 0 ? "rgba(255,255,255,0.08)" : "transparent", border: i === 0 ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: i === 0 ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
-            onMouseEnter={e => { if(i!==0){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
-            onMouseLeave={e => { if(i!==0){e.currentTarget.style.color="var(--text-3)";e.currentTarget.style.background="transparent"} }}
-          >{f}</button>
-        ))}
-      </div>
-
-      {/* Table */}
-      <div style={{ borderRadius: "16px", background: "var(--surface)", border: "1px solid var(--border)", overflow: "hidden", overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr style={{ background: "rgba(0,0,0,0.2)", borderBottom: "1px solid var(--border)" }}>
-              {["Vendor","Unit","Amount","Date","Status",""].map(h => (
-                <th key={h} style={{ padding: "12px 18px", textAlign: "left", fontSize: "11px", fontWeight: 600, color: "var(--text-3)", letterSpacing: "0.06em", fontFamily: "'DM Mono',monospace", textTransform: "uppercase" }}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              [1,2,3].map(i => (
-                <tr key={i} style={{ borderBottom: "1px solid var(--border)" }}>
-                  {[1,2,3,4,5,6].map(j => <td key={j} style={{ padding: "14px 18px" }}><div className="skeleton" style={{ height: "16px", width: "80px" }} /></td>)}
-                </tr>
-              ))
-            ) : invoices.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--text-3)", fontSize: "14px" }}>No invoices yet. Add your first vendor invoice.</td></tr>
-            ) : invoices.map((inv, i) => {
-              const sColor = STATUS_COLOR[inv.status] || "#A1A1AA"
-              const unitLabel = inv.unit ? `${inv.unit.property?.name ? inv.unit.property.name + " – " : ""}${inv.unit.unit_number}` : "—"
-              const amount = Number(inv.amount || 0)
-              const amountStr = amount >= 100000 ? `₹${(amount/100000).toFixed(1)}L` : `₹${amount.toLocaleString("en-IN")}`
-              const date = new Date(inv.invoice_date || inv.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
-              return (
-                <tr key={inv.id} className="anim-row" style={{ borderBottom: i < invoices.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
-                  onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
-                  onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
-                >
-                  <td style={{ padding: "14px 18px", fontSize: "13px", fontWeight: 600, color: "#fff" }}>{inv.vendor_name || "—"}</td>
-                  <td style={{ padding: "14px 18px", fontSize: "13px", color: "var(--text-2)" }}>{unitLabel}</td>
-                  <td style={{ padding: "14px 18px", fontSize: "14px", fontWeight: 700, color: "#10b981", fontFamily: "'DM Mono',monospace" }}>{amountStr}</td>
-                  <td style={{ padding: "14px 18px", fontSize: "12px", color: "var(--text-3)", fontFamily: "'DM Mono',monospace" }}>{date}</td>
-                  <td style={{ padding: "14px 18px" }}>
-                    <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${sColor}15`, color: sColor, border: `1px solid ${sColor}30`, textTransform: "capitalize" }}>{inv.status}</span>
-                  </td>
-                  <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                    <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer" }}>View →</button>
-                  </td>
-                </tr>
-              )
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Add Invoice Modal */}
-      {showModal && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "460px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Receipt size={18} color="#ec4899" /> Add Invoice</h2>
-              <button onClick={() => setShowModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
-            </div>
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Vendor Name</label>
-                <input type="text" placeholder="e.g. SparkFix Electrical" value={form.vendor_name} onChange={e => setForm({...form, vendor_name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none" }} />
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Amount (₹)</label>
-                  <input type="number" placeholder="e.g. 12500" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none" }} />
-                </div>
-                <div>
-                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Invoice Date</label>
-                  <input type="date" value={form.invoice_date} onChange={e => setForm({...form, invoice_date: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none" }} />
-                </div>
-              </div>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Related Unit (optional)</label>
-                <select value={form.unit_id} onChange={e => setForm({...form, unit_id: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", cursor: "pointer" }}>
-                  <option value="">Not unit-specific</option>
-                  {unitsList.map(u => <option key={u.id} value={u.id}>{u.property?.name ? `${u.property.name} – ` : ""}{u.unit_number}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
-              <button onClick={submitInvoice} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
-                {isSubmitting ? <><Loader2 size={14} style={{ animation: "spin 1s linear infinite" }} /> Saving...</> : "Save Invoice"}
-              </button>
-            </div>
-          </div>
+      {loading ? (
+        <div className="space-y-4">
+          {[1,2,3].map(i => <div key={i} className="h-28 bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl animate-pulse" />)}
         </div>
-      )}
-
-      {/* Upload Status Toast */}
-      {uploadStatus !== 'idle' && (
-        <div style={{ position: "fixed", bottom: "30px", right: "30px", zIndex: 1000, background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "12px", padding: "16px 20px", display: "flex", alignItems: "center", gap: "12px", boxShadow: "0 10px 30px rgba(0,0,0,0.5)", animation: "slideUp 0.3s ease-out forwards" }}>
-          {uploadStatus === 'uploading' && <Loader2 size={18} color="#3b82f6" className="spin" />}
-          {uploadStatus === 'processing' && <Loader2 size={18} color="#f59e0b" className="spin" />}
-          {uploadStatus === 'success' && <div style={{ width: "18px", height: "18px", borderRadius: "50%", background: "#10b981", display: "flex", alignItems: "center", justifyContent: "center" }}><CheckCircle2 size={12} color="#fff" /></div>}
+      ) : (
+        <div className="space-y-4">
+          {activeTab === "pending" && (
+            pendingInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No invoices pending approval.</div>
+            : pendingInvoices.map(i => renderInvoiceCard(i, true))
+          )}
           
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: "14px", fontWeight: 600, color: "#fff" }}>
-              {uploadStatus === 'uploading' ? 'Uploading document...' : uploadStatus === 'processing' ? 'Processing with AI...' : 'Upload complete!'}
-            </span>
-            <span style={{ fontSize: "12px", color: "var(--text-3)" }}>
-              {uploadStatus === 'uploading' ? 'Saving to secure storage' : uploadStatus === 'processing' ? 'Extracting details' : 'Document has been queued for review'}
-            </span>
-          </div>
+          {activeTab === "processing" && (
+            processingInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No invoices currently processing.</div>
+            : processingInvoices.map(i => renderInvoiceCard(i, false))
+          )}
+
+          {activeTab === "archived" && (
+            archivedInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><FileText className="mx-auto mb-2 opacity-50" size={32}/>No archived invoices.</div>
+            : archivedInvoices.map(i => renderInvoiceCard(i, false))
+          )}
         </div>
       )}
-
-      <style dangerouslySetInnerHTML={{__html: `
-        .spin { animation: spin 1s linear infinite; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        @keyframes slideUp { from { opacity: 0, transform: translateY(20px); } to { opacity: 1, transform: translateY(0); } }
-      `}} />
     </div>
   )
 }

@@ -1,0 +1,51 @@
+{
+  "theme": "brutalist",
+  "author": {
+    "name": "Nithesh Devarla",
+    "handle": "Aethera"
+  },
+  "slides": [
+    {
+      "type": "cover",
+      "headline": "Generative AI is a toy. You need Agentic AI.",
+      "body": "Answering a tenant's question about pool hours doesn't save you money. Stop buying chatbots. Start deploying digital teammates.",
+      "highlight": "Generative AI is a toy.",
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    },
+    {
+      "type": "content",
+      "headline": "The PropTech Illusion.",
+      "body": "Right now, every legacy vendor is slapping a 'Generative AI Chatbot' onto their 15-year-old software and calling it innovation.",
+      "highlight": "calling it innovation",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\agentic_ai_chatbot_toy_1780067845248_transparent.png"
+    },
+    {
+      "type": "content",
+      "headline": "Let's be brutally honest.",
+      "body": "An AI that politely reminds a tenant to pay rent is cute. But it does absolutely nothing to improve your profit margins.",
+      "highlight": "improve your profit margins",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\agentic_ai_workflow_1780067911413_transparent.png"
+    },
+    {
+      "type": "content",
+      "headline": "The difference is execution.",
+      "body": "Generative AI talks to you. Agentic AI actually does the work for you. It isn't a conversational gimmick—it is operational infrastructure.",
+      "highlight": "actually does the work",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\agentic_ai_workflow_1780067911413_transparent.png"
+    },
+    {
+      "type": "content",
+      "headline": "How Aethera acts.",
+      "body": "When a leak is reported, it checks lease liability, forces three vendors to bid, prevents price gouging, and presents you with one button: Approve.",
+      "highlight": "one button: Approve",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\agentic_ai_approve_btn_1780067961478_transparent.png"
+    },
+    {
+      "type": "closing",
+      "headline": "Stop buying chatbots to talk to your tenants.",
+      "body": "Start deploying digital teammates to actually run your buildings. Switch to Aethera's autonomous engine.",
+      "highlight": "digital teammates",
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    }
+  ]
+}

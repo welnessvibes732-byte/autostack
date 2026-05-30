@@ -1,0 +1,4 @@
+interface:
+  display_name: "Raj Shamani Carousel Creator"
+  short_description: "Build Raj Shamani-style editorial carousels"
+  default_prompt: "Use $rajshamani-carousel-creator to create a sharp educational Instagram/LinkedIn carousel from my topic."

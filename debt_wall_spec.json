@@ -1,0 +1,58 @@
+{
+  "theme": "brutalist",
+  "author": {
+    "name": "Nithesh Devarla",
+    "handle": "Aethera"
+  },
+  "slides": [
+    {
+      "type": "cover",
+      "headline": "The 2026 Debt Wall is here.",
+      "body": "Your 3-year floating rate debt has matured. Cap rates have expanded. Your building is worth less on paper than when you bought it.",
+      "highlight": "Debt Wall",
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    },
+    {
+      "type": "content",
+      "headline": "The bank doesn't care about your dog park.",
+      "body": "They only care about your Net Operating Income (NOI). If it isn't higher than it was 3 years ago, prepare for a massive cash-in refinance.",
+      "highlight": "NOI",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\exec_staring_1779381998603.png"
+    },
+    {
+      "type": "content",
+      "headline": "You can't just raise rent anymore.",
+      "body": "The market is soft. Concessions are everywhere. The only way to survive the Debt Wall is to violently reduce your operating expenses.",
+      "highlight": "violently reduce",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\financial_bleed_1779205856422.png"
+    },
+    {
+      "type": "content",
+      "headline": "But you can't cut what you can't see.",
+      "body": "If approvals are stuck in emails and vendors are overcharging you, you are flying blind into a hurricane.",
+      "highlight": "flying blind",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\money_falling_waste_1779458336219.png"
+    },
+    {
+      "type": "content",
+      "headline": "Aethera doesn't solve 'property management'.",
+      "body": "Welcome to the real world. Aethera is a Refinancing Survival Engine. It maps every single dollar of operational bleed and automatically eliminates it.",
+      "highlight": "Refinancing Survival Engine",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\live_dashboard_icon_1779640570254.png"
+    },
+    {
+      "type": "content",
+      "headline": "Inflate your NOI by crushing waste.",
+      "body": "Operators use Aethera's live telemetry to ensure their asset underwrites perfectly when the bank comes calling.",
+      "highlight": "crushing waste",
+      "img_path": "C:\\Users\\DELL\\.gemini\\antigravity\\brain\\1e1a770e-60c5-45bf-af7c-93e9dd74650b\\market_data_screen_1779458655346.png"
+    },
+    {
+      "type": "closing",
+      "headline": "Don't let a disorganized back-office cost you your building.",
+      "body": "Switch to Aethera. Save your yield.",
+      "highlight": "cost you your building",
+      "img_path": "C:\\Users\\DELL\\Documents\\autostackk\\user_avatar.png"
+    }
+  ]
+}
