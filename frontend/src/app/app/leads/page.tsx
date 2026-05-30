@@ -80,7 +80,7 @@ export default function LeadsPage() {
         budget_max: newLead.budget_max ? Number(newLead.budget_max) : 0,
         preferred_area: newLead.preferred_area,
         stage: 'new',
-        lead_score: 50
+        lead_score: 0
       })
       if (error) throw error
       
@@ -91,7 +91,7 @@ export default function LeadsPage() {
         body: JSON.stringify(newLead)
       }).catch(err => console.error("Email alert failed:", err))
 
-      toast.success("Lead created successfully")
+      toast.success("Lead created successfully. AI Qualification sent.")
       setShowCreateModal(false)
       setNewLead({ full_name: "", email: "", phone: "", inquiry_type: "residential", budget_max: "", preferred_area: "" })
       fetchLeads(orgId)
@@ -230,8 +230,12 @@ export default function LeadsPage() {
                     >
                       <div className="flex justify-between items-start mb-2">
                         <div className="font-medium text-white truncate max-w-[150px]">{lead.full_name}</div>
-                        <div className={`text-xs px-2 py-0.5 rounded border ${lead.lead_score >= 70 ? 'border-green-500/20 text-green-400 bg-green-500/10' : 'border-amber-500/20 text-amber-400 bg-amber-500/10'}`}>
-                          {lead.lead_score || 0}
+                        <div className={`text-xs px-2 py-0.5 rounded border ${
+                          lead.lead_score >= 70 ? 'border-green-500/20 text-green-400 bg-green-500/10' : 
+                          lead.lead_score > 0 ? 'border-amber-500/20 text-amber-400 bg-amber-500/10' :
+                          'border-blue-500/20 text-blue-400 bg-blue-500/10'
+                        }`}>
+                          {lead.lead_score > 0 ? lead.lead_score : "AI Pending"}
                         </div>
                       </div>
                       
