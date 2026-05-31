@@ -8,12 +8,19 @@ import { z } from "zod";
 import { supabase } from "../../../../lib/supabase";
 
 export async function GET(req: Request) {
+  const trace: string[] = [];
   try {
     const emailUser = process.env.GMAIL_USER || "niteshdevarla@gmail.com";
     const emailPass = process.env.GMAIL_APP_PASSWORD;
 
     if (!emailPass) {
+      trace.push("Error: GMAIL_APP_PASSWORD not set in environment variables");
       throw new Error("GMAIL_APP_PASSWORD not set");
+    }
+
+    if (!process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+      trace.push("Error: GOOGLE_GENERATIVE_AI_API_KEY not set in environment variables");
+      throw new Error("GOOGLE_GENERATIVE_AI_API_KEY not set");
     }
 
     const config = {
@@ -28,8 +35,9 @@ export async function GET(req: Request) {
       }
     };
 
-    console.log("Connecting to IMAP...");
+    trace.push("Connecting to IMAP...");
     const connection = await imaps.connect(config);
+    trace.push("IMAP Connected. Opening INBOX...");
     await connection.openBox("INBOX");
 
     const searchCriteria = ["UNSEEN"];
@@ -38,8 +46,9 @@ export async function GET(req: Request) {
       markSeen: true
     };
 
+    trace.push("Searching for UNSEEN messages...");
     const messages = await connection.search(searchCriteria, fetchOptions);
-    console.log(`Found ${messages.length} unread messages.`);
+    trace.push(`Found ${messages.length} unread messages.`);
     let processedCount = 0;
 
     const google = createGoogleGenerativeAI({
@@ -55,21 +64,25 @@ export async function GET(req: Request) {
       const parsed = await simpleParser(idHeader + allParts.body);
 
       const fromAddress = parsed.from?.value[0]?.address;
-      if (!fromAddress) continue;
+      trace.push(`Checking message from: ${fromAddress}`);
+      if (!fromAddress) {
+        trace.push("No from address found, skipping.");
+        continue;
+      }
 
       // Check if this sender exists in our leads database
-      const { data: lead } = await supabase
+      const { data: lead, error: supabaseError } = await supabase
         .from("leads")
         .select("id, full_name, email, notes, lead_score")
         .eq("email", fromAddress)
         .single();
 
-      if (!lead) {
-        // Not a lead, ignore.
+      if (supabaseError || !lead) {
+        trace.push(`No lead found in database for email: ${fromAddress}. Skipping.`);
         continue;
       }
 
-      console.log(`Processing reply from lead: ${lead.full_name} (${fromAddress})`);
+      trace.push(`Found matching lead: ${lead.full_name} (${fromAddress}). Analyzing with Gemini...`);
 
       // Use Gemini to analyze the response
       const emailContent = parsed.text || "";
@@ -97,12 +110,14 @@ export async function GET(req: Request) {
         `
       });
 
+      trace.push(`Gemini analysis complete. Suggested score: ${object.suggested_score}, Qualified: ${object.is_qualified}`);
+
       // Update Supabase
       const newScore = object.suggested_score;
       const newStage = object.is_qualified ? "qualified" : "new";
       const newNotes = (lead.notes || "") + `\n[AI Qualification - ${new Date().toISOString()}] ${object.summary}`;
 
-      await supabase
+      const { error: updateError } = await supabase
         .from("leads")
         .update({
           stage: newStage,
@@ -114,14 +129,19 @@ export async function GET(req: Request) {
         })
         .eq("id", lead.id);
 
-      processedCount++;
+      if (updateError) {
+        trace.push(`Failed to update Supabase lead: ${updateError.message}`);
+      } else {
+        trace.push(`Successfully updated lead in Supabase.`);
+        processedCount++;
+      }
     }
 
     connection.end();
-    return NextResponse.json({ status: "success", processed: processedCount });
+    return NextResponse.json({ status: "success", processed: processedCount, trace });
 
   } catch (error: any) {
-    console.error("Cron Error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    trace.push(`Fatal Error: ${error.message}`);
+    return NextResponse.json({ error: error.message, trace }, { status: 500 });
   }
 }
