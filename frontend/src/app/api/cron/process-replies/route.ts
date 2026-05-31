@@ -95,7 +95,7 @@ export async function GET(req: Request) {
       const emailContent = parsed.text || "";
       
       const { object } = await generateObject({
-        model: google('gemini-1.5-flash'),
+        model: google('gemini-1.5-flash-latest'),
         schema: z.object({
           qualification_answers: z.object({
             budget: z.string().optional().describe("The lead's budget if mentioned"),
