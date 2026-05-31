@@ -74,17 +74,20 @@ export async function GET(req: Request) {
         continue;
       }
 
-      // Check if this sender exists in our leads database
-      const { data: lead, error: supabaseError } = await supabase
+      // Check if this sender exists in our leads database (case-insensitive)
+      const { data: leads, error: supabaseError } = await supabase
         .from("leads")
         .select("id, full_name, email, notes, lead_score")
-        .eq("email", fromAddress)
-        .single();
+        .ilike("email", fromAddress)
+        .order("created_at", { ascending: false })
+        .limit(1);
 
-      if (supabaseError || !lead) {
+      if (supabaseError || !leads || leads.length === 0) {
         trace.push(`No lead found in database for email: ${fromAddress}. Skipping.`);
         continue;
       }
+      
+      const lead = leads[0];
 
       trace.push(`Found matching lead: ${lead.full_name} (${fromAddress}). Analyzing with Gemini...`);
 
