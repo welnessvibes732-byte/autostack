@@ -1,6 +1,7 @@
 // frontend/src/app/api/webhooks/new-lead/route.ts
 import { NextResponse } from "next/server";
 import { sendEmail } from "../../../../lib/email";
+import { supabase } from "../../../../lib/supabase";
 
 export async function POST(req: Request) {
   try {
@@ -40,6 +41,18 @@ export async function POST(req: Request) {
     if (!result.success) {
       console.error("Failed to send qualification email:", result.error);
       return NextResponse.json({ error: "Email failed to send" }, { status: 500 });
+    }
+
+    // Update Supabase to start the drip campaign
+    if (lead.id) {
+      const nextFollowUp = new Date();
+      nextFollowUp.setDate(nextFollowUp.getDate() + 2); // Day 2 follow-up
+      
+      await supabase.from("leads").update({
+        follow_up_day: 0,
+        last_contact_at: new Date().toISOString(),
+        next_follow_up_at: nextFollowUp.toISOString()
+      }).eq("id", lead.id);
     }
 
     return NextResponse.json({ status: "success", message: "Qualification email sent" });
