@@ -1,10 +1,13 @@
-// frontend/src/app/api/cron/daily-followups/route.ts
 import { NextResponse } from "next/server";
-import { supabase } from "../../../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 import { sendEmail } from "../../../../lib/email";
 
 export async function GET(req: Request) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
     // 1. Fetch all leads that are in 'new' stage, have an email, and need a follow-up today or earlier.
     const now = new Date().toISOString();
     const { data: leads, error } = await supabase

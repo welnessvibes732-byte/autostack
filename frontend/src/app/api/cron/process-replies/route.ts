@@ -5,11 +5,15 @@ import { simpleParser } from "mailparser";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { generateObject } from "ai";
 import { z } from "zod";
-import { supabase } from "../../../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 export async function GET(req: Request) {
   const trace: string[] = [];
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     const emailUser = process.env.GMAIL_USER || "niteshdevarla@gmail.com";
     const emailPass = process.env.GMAIL_APP_PASSWORD;
 

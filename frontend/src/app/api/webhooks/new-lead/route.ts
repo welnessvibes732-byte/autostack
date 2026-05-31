@@ -1,10 +1,13 @@
-// frontend/src/app/api/webhooks/new-lead/route.ts
 import { NextResponse } from "next/server";
 import { sendEmail } from "../../../../lib/email";
-import { supabase } from "../../../../lib/supabase";
+import { createClient } from "@supabase/supabase-js";
 
 export async function POST(req: Request) {
   try {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    
     const lead = await req.json();
     
     // If there is no email provided, we cannot qualify them via email
