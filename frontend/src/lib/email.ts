@@ -12,13 +12,14 @@ export const transporter = nodemailer.createTransport({
 });
 
 // A wrapper to make sending easier across the app
-export const sendEmail = async ({ to, subject, html }: { to: string, subject: string, html: string }) => {
+export const sendEmail = async ({ to, subject, html, text }: { to: string, subject: string, html: string, text?: string }) => {
   try {
     const info = await transporter.sendMail({
       from: `"PropIQ Automation" <${process.env.GMAIL_USER || "niteshdevarla@gmail.com"}>`,
       to,
       subject,
-      html
+      html,
+      text
     });
     console.log("[EMAIL SENT SUCCESSFULLY] Message ID:", info.messageId);
     return { success: true, messageId: info.messageId };

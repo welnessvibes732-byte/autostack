@@ -31,11 +31,28 @@ export async function POST(req: Request) {
       </div>
     `;
 
+    const textBody = `Hi ${lead.full_name},
+
+Thank you for your interest in our properties at PropIQ!
+
+To help us find the perfect match for you, could you please reply to this email with a quick answer to the following questions?
+
+1. What is your maximum monthly budget?
+2. When are you looking to move in?
+3. Do you have any pets? (If so, what kind?)
+4. How many people will be living in the property?
+
+Once you reply, our team will immediately curate a list of properties that match your criteria and get back to you.
+
+Best regards,
+The PropIQ Team`;
+
     // Send the email to the LEAD
     const result = await sendEmail({
       to: lead.email,
       subject: `Your Property Inquiry with PropIQ`,
       html: htmlBody,
+      text: textBody,
     });
 
     if (!result.success) {
