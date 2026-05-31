@@ -109,7 +109,8 @@ export async function GET(req: Request) {
           lead_score: newScore,
           qualification_answers: object.qualification_answers,
           notes: newNotes,
-          last_contact_at: new Date().toISOString()
+          last_contact_at: new Date().toISOString(),
+          next_follow_up_at: null // Stop the drip campaign
         })
         .eq("id", lead.id);
 
