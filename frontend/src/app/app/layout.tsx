@@ -9,7 +9,7 @@ import { useGSAP } from "@gsap/react"
 import {
   LayoutDashboard, Building2, KeySquare, Users, UserPlus, Wrench,
   FileText, Search, BarChart3, Receipt, BellRing, Link2, Settings, LogOut,
-  ChevronLeft, Menu, X, CheckSquare
+  ChevronLeft, Menu, X, CheckSquare, Truck
 } from "lucide-react"
 
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
@@ -23,6 +23,7 @@ const navItems = [
   { name: "Tenants",      href: "/app/tenants",      icon: Users },
   { name: "Leads",        href: "/app/leads",        icon: UserPlus },
   { name: "Maintenance",  href: "/app/maintenance",  icon: Wrench },
+  { name: "Vendors",      href: "/app/vendors",      icon: Truck },
   { name: "Documents",    href: "/app/documents",    icon: FileText },
   { name: "AI Search",    href: "/app/search",       icon: Search },
   { name: "Analytics",    href: "/app/analytics",    icon: BarChart3 },
