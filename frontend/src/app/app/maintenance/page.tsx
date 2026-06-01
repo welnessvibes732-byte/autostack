@@ -68,8 +68,7 @@ export default function MaintenancePage() {
   const handleApproveQuote = async (ticket: any) => {
     setProcessingId(ticket.id)
     try {
-      if (!process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK, {
+      const res = await fetch('/api/emails/maintenance-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: "approved", ticket_id: ticket.id, vendor_id: ticket.vendor_id, approved_cost: ticket.actual_cost, organization_id: orgId, approved_by: currentUser?.id })
       })

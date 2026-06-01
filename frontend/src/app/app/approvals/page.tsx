@@ -147,9 +147,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('invoices').update({ status: 'approved', approved_by: currentUser?.id, approved_at: new Date().toISOString() }).eq('id', invoiceId)
       if (error) throw error
       
-      if (process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_approved", invoice_id: invoiceId }) }).catch(console.error)
-      }
+      fetch('/api/emails/invoice-approval', { method: 'POST', body: JSON.stringify({ action: "notify_approved", invoice_id: invoiceId }) }).catch(console.error)
       
       setInvoices(prev => prev.filter(i => i.id !== invoiceId))
       toast.success("Invoice approved successfully")
@@ -167,9 +165,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('invoices').update({ status: 'rejected', anomaly_reason: rejectionReason }).eq('id', invoiceId)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_rejected", invoice_id: invoiceId, reason: rejectionReason }) }).catch(console.error)
-      }
+      fetch('/api/emails/invoice-approval', { method: 'POST', body: JSON.stringify({ action: "notify_rejected", invoice_id: invoiceId, reason: rejectionReason }) }).catch(console.error)
       
       setInvoices(prev => prev.filter(i => i.id !== invoiceId))
       setRejectingId(null)
@@ -189,9 +185,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leases').update({ renewal_status: 'offered' }).eq('id', lease.id)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "send_renewal_offer", lease_id: lease.id, tenant_email: lease.tenant_email }) }).catch(console.error)
-      }
+      fetch('/api/emails/lease-renewal', { method: 'POST', body: JSON.stringify({ action: "send_renewal_offer", lease_id: lease.id, tenant_email: lease.tenant_email }) }).catch(console.error)
       
       setLeases(prev => prev.map(l => l.id === lease.id ? { ...l, renewal_status: 'offered' } : l))
       toast.success("Renewal offer sent to tenant")
@@ -209,9 +203,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leases').update({ renewal_status: 'renewed' }).eq('id', leaseId)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_renewed", lease_id: leaseId }) }).catch(console.error)
-      }
+      fetch('/api/emails/lease-renewal', { method: 'POST', body: JSON.stringify({ action: "notify_renewed", lease_id: leaseId }) }).catch(console.error)
       
       setLeases(prev => prev.filter(l => l.id !== leaseId))
       toast.success("Lease marked as renewed")
@@ -243,9 +235,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('maintenance_tickets').update({ status: 'in_progress', assigned_at: new Date().toISOString() }).eq('id', ticket.id)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_approved", ticket_id: ticket.id }) }).catch(console.error)
-      }
+      fetch('/api/emails/maintenance-approval', { method: 'POST', body: JSON.stringify({ action: "notify_approved", ticket_id: ticket.id }) }).catch(console.error)
       
       setTickets(prev => prev.filter(t => t.id !== ticket.id))
       toast.success("Quote approved. Vendor notified.")
@@ -263,9 +253,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('maintenance_tickets').update({ status: 'open', actual_cost: null }).eq('id', ticket.id)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_MAINTENANCE_APPROVE_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_rejected", ticket_id: ticket.id, reason: rejectionReason }) }).catch(console.error)
-      }
+      fetch('/api/emails/maintenance-approval', { method: 'POST', body: JSON.stringify({ action: "notify_rejected", ticket_id: ticket.id, reason: rejectionReason }) }).catch(console.error)
       
       setTickets(prev => prev.filter(t => t.id !== ticket.id))
       setRejectingId(null)
@@ -285,9 +273,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leads').update({ stage: 'pending_signoff' }).eq('id', lead.id)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_signoff_request", lead_id: lead.id }) }).catch(console.error)
-      }
+      fetch('/api/emails/deal-signoff', { method: 'POST', body: JSON.stringify({ action: "notify_signoff_request", lead_id: lead.id }) }).catch(console.error)
       
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: 'pending_signoff' } : l))
       toast.success("Sign-off requested")
@@ -305,9 +291,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leads').update({ stage: 'won' }).eq('id', leadId)
       if (error) throw error
 
-      if (process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK, { method: 'POST', body: JSON.stringify({ action: "notify_approved", lead_id: leadId }) }).catch(console.error)
-      }
+      fetch('/api/emails/deal-signoff', { method: 'POST', body: JSON.stringify({ action: "notify_approved", lead_id: leadId }) }).catch(console.error)
       
       setLeads(prev => prev.filter(l => l.id !== leadId))
       toast.success("Deal approved")
@@ -729,7 +713,7 @@ export default function ApprovalsPage() {
                         if(!rejectionReason.trim()) return toast.error("Provide feedback")
                         setProcessingId(lead.id)
                         try {
-                          await fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK!, {
+                          await fetch('/api/emails/deal-signoff', {
                             method: 'POST', headers: {'Content-Type':'application/json'},
                             body: JSON.stringify({ action: "sent_back", lead_id: lead.id, feedback: rejectionReason, organization_id: orgId })
                           })

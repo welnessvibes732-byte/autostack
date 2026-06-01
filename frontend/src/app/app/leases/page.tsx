@@ -127,8 +127,7 @@ export default function LeasesPage() {
   const handleSendRenewal = async (lease: any) => {
     setProcessingId(lease.id)
     try {
-      if (!process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK, {
+      const res = await fetch('/api/emails/lease-renewal', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: "send_renewal_offer", lease_id: lease.id, tenant_name: lease.tenant_name, tenant_email: lease.tenant_email, unit_id: lease.unit_id, expiry_date: lease.expiry_date, current_rent: lease.rent_amount, organization_id: orgId })
       })
@@ -146,8 +145,7 @@ export default function LeasesPage() {
   const handleMarkRenewed = async (leaseId: string) => {
     setProcessingId(leaseId)
     try {
-      if (!process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_LEASE_RENEWAL_WEBHOOK, {
+      const res = await fetch('/api/emails/lease-renewal', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: "mark_renewed", lease_id: leaseId, organization_id: orgId })
       })

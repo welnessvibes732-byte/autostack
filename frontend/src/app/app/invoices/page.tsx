@@ -114,8 +114,7 @@ export default function InvoicesPage() {
       }
 
       // 2. Trigger Autonomous Approval Flow
-      if (!process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK, {
+      const res = await fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: "approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
       })
@@ -133,8 +132,7 @@ export default function InvoicesPage() {
     if (!reason) return
     setProcessingId(invoiceId)
     try {
-      if (!process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_INVOICE_APPROVE_WEBHOOK, {
+      const res = await fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: "rejected", invoice_id: invoiceId, organization_id: orgId, rejected_by: currentUser?.id, rejection_reason: reason })
       })

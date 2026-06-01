@@ -51,24 +51,17 @@ export async function POST(req: Request) {
 
     if (updateErr) throw updateErr;
 
-    // 3. Forward to n8n W3 webhook (only for "closed" stage — Closed Won email)
-    const n8nWebhookUrl = process.env.N8N_LEAD_STAGE_WEBHOOK_URL;
-    if (n8nWebhookUrl && new_stage === 'closed') {
+    // 3. Send Native "Closed Won" email
+    if (new_stage === 'closed' && lead.email) {
       try {
-        await fetch(n8nWebhookUrl, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            lead_id,
-            stage: new_stage,
-            email: lead.email,
-            full_name: lead.full_name,
-            user_id: user?.id || 'system',
-            organization_id: lead.organization_id
-          })
+        const { sendEmail } = await import('@/lib/email');
+        await sendEmail({
+          to: lead.email,
+          subject: "Welcome to your new home!",
+          html: `<p>Hi ${lead.full_name},</p><p>Congratulations! Your application has been approved and the deal is closed. We are excited to welcome you to our community.</p>`
         });
       } catch (e) {
-        console.error("Failed to call n8n W3 webhook", e);
+        console.error("Failed to send welcome email", e);
       }
     }
 

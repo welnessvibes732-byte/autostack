@@ -66,35 +66,44 @@ export async function POST(req: Request) {
       return NextResponse.json({ success: true, notifiedCount: 0, message: 'No matching vendors found.' });
     }
 
-    // 3. Prepare payload for n8n
+    // 3. Send emails natively via Nodemailer
     const baseUrl = getBaseUrl();
-    const payload = vendors.map(vendor => {
-      // Handle property name (it could be direct on ticket if property_id was set, or via unit_id)
+    const { sendEmail } = await import('@/lib/email');
+    
+    let notifiedCount = 0;
+
+    for (const vendor of vendors) {
       const propName = ticket.property?.name || ticket.unit?.property?.name || 'Unknown Property';
       const propAddress = ticket.property?.address_line1 || ticket.unit?.property?.address_line1 || 'Unknown Address';
       const tenantName = ticket.tenant?.full_name || 'Not specified';
       const tenantPhone = ticket.tenant?.phone || 'Not specified';
-      
-      return {
-        vendor_id: vendor.id,
-        vendor_name: vendor.name,
-        vendor_email: vendor.email,
-        ticket_id: ticket.id,
-        ticket_title: ticket.title,
-        ticket_description: ticket.description,
-        property_name: propName,
-        property_address: propAddress,
-        unit_number: ticket.unit?.unit_number || 'Common Area',
-        tenant_name: tenantName,
-        tenant_phone: tenantPhone,
-        priority: ticket.priority,
-        accept_link: `${baseUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendor.id}`
-      };
-    });
+      const acceptLink = `${baseUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendor.id}`;
 
-    // 4. Return payload to frontend — the browser will call n8n directly
-    // (Same pattern as leases page — browser calls localhost:5678 on user's machine)
-    return NextResponse.json({ success: true, notifiedCount: vendors.length, payload });
+      if (vendor.email) {
+        await sendEmail({
+          to: vendor.email,
+          subject: `New Work Order Available: ${ticket.title}`,
+          html: `
+            <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+              <h2>New Maintenance Job</h2>
+              <p><strong>Title:</strong> ${ticket.title}</p>
+              <p><strong>Property:</strong> ${propName} - Unit ${ticket.unit?.unit_number || 'Common Area'}</p>
+              <p><strong>Address:</strong> ${propAddress}</p>
+              <p><strong>Priority:</strong> ${ticket.priority}</p>
+              <p><strong>Description:</strong> ${ticket.description}</p>
+              <p><strong>Tenant:</strong> ${tenantName} (${tenantPhone})</p>
+              <div style="margin-top: 20px;">
+                <a href="${acceptLink}" style="background-color: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Submit a Quote / Accept Job</a>
+              </div>
+            </div>
+          `
+        });
+        notifiedCount++;
+      }
+    }
+
+    // 4. Return success to frontend
+    return NextResponse.json({ success: true, notifiedCount, message: 'Broadcasted to vendors successfully.' });
 
   } catch (error: any) {
     console.error('Broadcast error:', error);

@@ -130,8 +130,7 @@ export default function LeadsPage() {
   const handleRequestSignoff = async () => {
     setIsSubmitting(true)
     try {
-      if (!process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK, {
+      const res = await fetch('/api/emails/deal-signoff', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           action: "request_signoff", lead_id: selectedLead.id, lead_name: selectedLead.full_name,
@@ -153,8 +152,7 @@ export default function LeadsPage() {
   const handleApproveDeal = async () => {
     setIsSubmitting(true)
     try {
-      if (!process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK) throw new Error("Webhook not configured")
-      const res = await fetch(process.env.NEXT_PUBLIC_N8N_DEAL_SIGNOFF_WEBHOOK, {
+      const res = await fetch('/api/emails/deal-signoff', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: "approved", lead_id: selectedLead.id, organization_id: orgId, approved_by: currentUser?.id })
       })
