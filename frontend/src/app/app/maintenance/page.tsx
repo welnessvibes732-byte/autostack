@@ -19,7 +19,8 @@ export default function MaintenancePage() {
   
   // Create Request Modal State
   const [showCreateModal, setShowCreateModal] = useState(false)
-  const [newReq, setNewReq] = useState({ title: "", description: "", priority: "routine", category: "general", tenant_name: "" })
+  const [newReq, setNewReq] = useState({ title: "", description: "", priority: "routine", category: "general", lease_id: "" })
+  const [activeLeases, setActiveLeases] = useState<any[]>([])
 
   useEffect(() => {
     init()
@@ -34,6 +35,7 @@ export default function MaintenancePage() {
       setOrgId(org)
       
       await fetchTickets(org)
+      await fetchLeases(org)
       
       const channelId = `maintenance-page-${Math.random()}`
       const channel = supabase.channel(channelId)
@@ -45,6 +47,15 @@ export default function MaintenancePage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const fetchLeases = async (org: string) => {
+    const { data } = await supabase.from('leases').select(`
+      id,
+      units(id, unit_number, properties(name)),
+      tenants(id, full_name)
+    `).eq('organization_id', org)
+    if (data) setActiveLeases(data)
   }
 
   const fetchTickets = async (org: string) => {
@@ -75,6 +86,11 @@ export default function MaintenancePage() {
 
   const handleCreateRequest = async () => {
     if (!newReq.title) return toast.error("Title required")
+    if (!newReq.lease_id) return toast.error("Please select a tenant/unit")
+    
+    const selectedLease = activeLeases.find(l => l.id === newReq.lease_id)
+    if (!selectedLease) return toast.error("Invalid lease selected")
+
     setProcessingId("create")
     try {
       const { error } = await supabase.from('maintenance_tickets').insert({
@@ -85,13 +101,14 @@ export default function MaintenancePage() {
         category: newReq.category,
         status: 'open',
         reported_by: currentUser?.id,
-        tenant_name: newReq.tenant_name
+        unit_id: selectedLease.units?.id,
+        tenant_id: selectedLease.tenants?.id,
       })
       if (error) throw error
       
       toast.success("Request created")
       setShowCreateModal(false)
-      setNewReq({ title: "", description: "", priority: "routine", category: "general", tenant_name: "" })
+      setNewReq({ title: "", description: "", priority: "routine", category: "general", lease_id: "" })
       fetchTickets(orgId)
     } catch (e) {
       toast.error("Failed to create request")
@@ -289,8 +306,15 @@ export default function MaintenancePage() {
               </div>
 
               <div>
-                <label className="block text-sm text-[#A1A1AA] mb-1">Tenant Name (Required)</label>
-                <input value={newReq.tenant_name} onChange={e=>setNewReq({...newReq, tenant_name: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. John Doe" />
+                <label className="block text-sm text-[#A1A1AA] mb-1">Select Property & Tenant</label>
+                <select value={newReq.lease_id} onChange={e=>setNewReq({...newReq, lease_id: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                  <option value="">-- Select a Tenant --</option>
+                  {activeLeases.map(lease => (
+                    <option key={lease.id} value={lease.id}>
+                      {lease.tenants?.full_name || 'Unknown Tenant'} - {lease.units?.properties?.name || 'Unknown Property'} (Unit {lease.units?.unit_number || '?'})
+                    </option>
+                  ))}
+                </select>
               </div>
               
               <div>
