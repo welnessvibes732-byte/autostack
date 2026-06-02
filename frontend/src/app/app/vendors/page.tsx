@@ -192,7 +192,7 @@ export default function VendorsPage() {
                     <td className="p-4 align-top">
                       <div className="font-medium text-white flex items-center gap-2">
                         {vendor.name}
-                        {vendor.is_preferred && <Shield size={14} className="text-purple-400" title="Preferred Vendor"/>}
+                        {vendor.is_preferred && <span title="Preferred Vendor"><Shield size={14} className="text-purple-400" /></span>}
                       </div>
                       <div className="text-xs text-[#A1A1AA] mt-1 line-clamp-1 max-w-[200px]">ID: {vendor.id.slice(0,8)}</div>
                     </td>
