@@ -79,21 +79,44 @@ export async function POST(req: Request) {
     // 4. Automatically Assign Vendor if none is set
     let assignedVendorId = ticket.vendor_id;
     
-    if (!assignedVendorId && pincode) {
-      console.log("Auto-assigning vendor for pincode:", pincode);
-      // Fetch eligible vendors
+    if (!assignedVendorId) {
+      console.log("Auto-assigning vendor for ticket:", ticket.id);
+      
+      // Attempt 1: Match both pincode (if available) and category
       let query = supabase
         .from('vendors')
         .select('*')
         .eq('organization_id', ticket.organization_id)
-        .eq('is_blacklisted', false)
-        .contains('service_pincodes', [pincode]);
+        .eq('is_blacklisted', false);
 
-      if (ticket.category) {
-         query = query.contains('category', [ticket.category]);
+      if (pincode) query = query.contains('service_pincodes', [pincode]);
+      if (ticket.category) query = query.contains('category', [ticket.category]);
+
+      let { data: vendors } = await query;
+      
+      // Fallback 1: Ignore pincode, just match category
+      if ((!vendors || vendors.length === 0) && pincode) {
+        console.log("No vendors found for pincode, trying just category...");
+        let fallbackQuery = supabase
+          .from('vendors')
+          .select('*')
+          .eq('organization_id', ticket.organization_id)
+          .eq('is_blacklisted', false);
+        if (ticket.category) fallbackQuery = fallbackQuery.contains('category', [ticket.category]);
+        const res = await fallbackQuery;
+        vendors = res.data;
       }
 
-      const { data: vendors } = await query;
+      // Fallback 2: Ignore category, just get ANY valid vendor
+      if (!vendors || vendors.length === 0) {
+        console.log("No vendors found for category either, picking ANY available vendor...");
+        const res = await supabase
+          .from('vendors')
+          .select('*')
+          .eq('organization_id', ticket.organization_id)
+          .eq('is_blacklisted', false);
+        vendors = res.data;
+      }
       
       if (vendors && vendors.length > 0) {
         // Simple assignment: pick the one with highest score (we simplify the algorithm here)
@@ -116,6 +139,8 @@ export async function POST(req: Request) {
           .eq('id', ticket.id);
           
         console.log("Successfully auto-assigned to vendor:", winningVendor.name);
+      } else {
+        console.log("Absolutely no valid vendors found in the entire organization to auto-assign.");
       }
     }
 
