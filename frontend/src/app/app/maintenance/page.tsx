@@ -216,37 +216,9 @@ export default function MaintenancePage() {
                 </button>
               )}
               {ticket.status === 'open' && (
-                <button onClick={async () => {
-                  const toastId = toast.loading("Broadcasting to available vendors...");
-                  try {
-                    const { data: { session } } = await supabase.auth.getSession();
-                    const token = session?.access_token;
-                    const res = await fetch('/api/maintenance/broadcast', {
-                      method: 'POST',
-                      headers: { 
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                      },
-                      body: JSON.stringify({ ticket_id: ticket.id })
-                    });
-                    
-                    if (!res.ok) throw new Error("Failed to broadcast");
-                    
-                    const data = await res.json();
-                    
-                    if (data.notifiedCount > 0) {
-                      await supabase.from('maintenance_tickets').update({ status: 'assigned' }).eq('id', ticket.id);
-                      toast.success(`Broadcasted to ${data.notifiedCount} vendors!`, { id: toastId });
-                      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'assigned' } : t));
-                    } else {
-                      toast.error("No matching vendors found for this category.", { id: toastId });
-                    }
-                  } catch (e: any) {
-                    toast.error(e.message || "Failed to broadcast", { id: toastId });
-                  }
-                }} className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors flex items-center justify-center gap-2">
-                  <Wrench size={14}/> Auto-Assign Vendor
-                </button>
+                <div className="w-full px-4 py-2 text-sm bg-blue-600/50 text-white/70 rounded-md flex items-center justify-center gap-2 cursor-not-allowed" title="Vendor will be assigned automatically">
+                  <Wrench size={14}/> Auto-Assigning...
+                </div>
               )}
               {ticket.photo_url && (
                 <button onClick={() => window.open(ticket.photo_url, '_blank')} className="w-full px-4 py-2 text-sm bg-[#1E1E1E] hover:bg-white/20 text-white rounded-md transition-colors flex items-center justify-center gap-2">
