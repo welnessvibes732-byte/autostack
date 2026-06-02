@@ -96,7 +96,7 @@ export default function MaintenancePage() {
       const unitId = Array.isArray(selectedLease.units) ? selectedLease.units[0]?.id : selectedLease.units?.id
       const tenantId = Array.isArray(selectedLease.tenants) ? selectedLease.tenants[0]?.id : selectedLease.tenants?.id
 
-      const { error } = await supabase.from('maintenance_tickets').insert({
+      const { data: newTicket, error } = await supabase.from('maintenance_tickets').insert({
         organization_id: orgId,
         title: newReq.title,
         description: newReq.description,
@@ -106,8 +106,17 @@ export default function MaintenancePage() {
         reported_by: currentUser?.id || null,
         unit_id: unitId || null,
         tenant_id: tenantId || null,
-      })
+      }).select('*').single()
       if (error) throw error
+      
+      // Fire off the email notification instantly
+      if (newTicket) {
+        fetch('/api/webhooks/new-maintenance-ticket', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newTicket)
+        }).catch(console.error)
+      }
       
       toast.success("Request created")
       setShowCreateModal(false)
