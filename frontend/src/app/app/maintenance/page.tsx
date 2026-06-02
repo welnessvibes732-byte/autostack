@@ -105,7 +105,6 @@ export default function MaintenancePage() {
         priority: newReq.priority,
         category: newReq.category,
         status: 'open',
-        reported_by: currentUser?.id || null,
         unit_id: unitId || null,
         tenant_id: tenantId || null,
       }).select('*').single();
