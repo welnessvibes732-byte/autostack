@@ -92,11 +92,13 @@ export default function MaintenancePage() {
 
     setProcessingId("create")
     try {
-      // Safely extract IDs in case units/tenants are arrays (Supabase relationship quirk)
+      console.log("Attempting to create ticket...", newReq);
+      
       const unitId = Array.isArray(selectedLease.units) ? selectedLease.units[0]?.id : selectedLease.units?.id
       const tenantId = Array.isArray(selectedLease.tenants) ? selectedLease.tenants[0]?.id : selectedLease.tenants?.id
 
-      const { data: newTicket, error } = await supabase.from('maintenance_tickets').insert({
+      // Wrap the insert in a manual timeout just in case it hangs forever
+      const insertPromise = supabase.from('maintenance_tickets').insert({
         organization_id: orgId,
         title: newReq.title,
         description: newReq.description,
@@ -106,8 +108,15 @@ export default function MaintenancePage() {
         reported_by: currentUser?.id || null,
         unit_id: unitId || null,
         tenant_id: tenantId || null,
-      }).select('*').single()
+      }).select('*').single();
+
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Request timed out after 10 seconds")), 10000));
+      
+      const { data: newTicket, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
+
       if (error) throw error
+      
+      console.log("Ticket created successfully:", newTicket);
       
       // Fire off the email notification instantly
       if (newTicket) {
@@ -118,13 +127,13 @@ export default function MaintenancePage() {
         }).catch(console.error)
       }
       
-      toast.success("Request created")
+      toast.success("Ticket submitted successfully!")
       setShowCreateModal(false)
       setNewReq({ title: "", description: "", priority: "routine", category: "general", lease_id: "" })
       fetchTickets(orgId)
     } catch (e: any) {
       console.error("Create request error:", e)
-      toast.error(`Error: ${e.message || "Failed to create request"}`)
+      toast.error(`Error: ${e.message || "Failed to create ticket"}`)
     } finally {
       setProcessingId(null)
     }
