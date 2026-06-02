@@ -385,7 +385,7 @@ export default function MaintenancePage() {
             <div className="flex gap-3 mt-6">
               <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors">Cancel</button>
               <button onClick={handleCreateRequest} disabled={processingId === 'create'} className="flex-1 px-4 py-2 text-white font-medium text-sm rounded-lg flex justify-center items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
-                {processingId === 'create' ? <Loader2 size={16} className="animate-spin"/> : "Create Request"}
+                {processingId === 'create' ? <Loader2 size={16} className="animate-spin"/> : "Submit Ticket"}
               </button>
             </div>
           </div>
