@@ -219,9 +219,14 @@ export default function MaintenancePage() {
                 <button onClick={async () => {
                   const toastId = toast.loading("Broadcasting to available vendors...");
                   try {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    const token = session?.access_token;
                     const res = await fetch('/api/maintenance/broadcast', {
                       method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
+                      headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                      },
                       body: JSON.stringify({ ticket_id: ticket.id })
                     });
                     
