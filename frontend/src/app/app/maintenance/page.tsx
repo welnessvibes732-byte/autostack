@@ -92,6 +92,10 @@ export default function MaintenancePage() {
 
     setProcessingId("create")
     try {
+      // Safely extract IDs in case units/tenants are arrays (Supabase relationship quirk)
+      const unitId = Array.isArray(selectedLease.units) ? selectedLease.units[0]?.id : selectedLease.units?.id
+      const tenantId = Array.isArray(selectedLease.tenants) ? selectedLease.tenants[0]?.id : selectedLease.tenants?.id
+
       const { error } = await supabase.from('maintenance_tickets').insert({
         organization_id: orgId,
         title: newReq.title,
@@ -99,9 +103,9 @@ export default function MaintenancePage() {
         priority: newReq.priority,
         category: newReq.category,
         status: 'open',
-        reported_by: currentUser?.id,
-        unit_id: selectedLease.units?.id,
-        tenant_id: selectedLease.tenants?.id,
+        reported_by: currentUser?.id || null,
+        unit_id: unitId || null,
+        tenant_id: tenantId || null,
       })
       if (error) throw error
       
@@ -109,8 +113,9 @@ export default function MaintenancePage() {
       setShowCreateModal(false)
       setNewReq({ title: "", description: "", priority: "routine", category: "general", lease_id: "" })
       fetchTickets(orgId)
-    } catch (e) {
-      toast.error("Failed to create request")
+    } catch (e: any) {
+      console.error("Create request error:", e)
+      toast.error(`Error: ${e.message || "Failed to create request"}`)
     } finally {
       setProcessingId(null)
     }
@@ -195,11 +200,28 @@ export default function MaintenancePage() {
               )}
               {ticket.status === 'open' && (
                 <button onClick={async () => {
-                  const toastId = toast.loading("AI routing to best available vendor...");
-                  setTimeout(async () => {
-                    await supabase.from('maintenance_tickets').update({ status: 'assigned' }).eq('id', ticket.id);
-                    toast.success("Vendor assigned successfully!", { id: toastId });
-                  }, 1500);
+                  const toastId = toast.loading("Broadcasting to available vendors...");
+                  try {
+                    const res = await fetch('/api/maintenance/broadcast', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ ticket_id: ticket.id })
+                    });
+                    
+                    if (!res.ok) throw new Error("Failed to broadcast");
+                    
+                    const data = await res.json();
+                    
+                    if (data.notifiedCount > 0) {
+                      await supabase.from('maintenance_tickets').update({ status: 'assigned' }).eq('id', ticket.id);
+                      toast.success(`Broadcasted to ${data.notifiedCount} vendors!`, { id: toastId });
+                      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'assigned' } : t));
+                    } else {
+                      toast.error("No matching vendors found for this category.", { id: toastId });
+                    }
+                  } catch (e: any) {
+                    toast.error(e.message || "Failed to broadcast", { id: toastId });
+                  }
                 }} className="w-full px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-md transition-colors flex items-center justify-center gap-2">
                   <Wrench size={14}/> Auto-Assign Vendor
                 </button>
