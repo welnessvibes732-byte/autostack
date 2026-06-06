@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Bell, Settings, X, Check, Loader2 } from "lucide-react"
+import { Bell, Settings, X, Check, Loader2, Zap } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
@@ -20,24 +20,25 @@ export default function Alerts() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    async function fetchAlerts() {
-      try {
-        const orgId = await getOrCreateOrg()
-        const { data, error } = await supabase
-          .from("alerts")
-          .select("*")
-          .eq("organization_id", orgId)
-          .order("sent_at", { ascending: false })
-          .limit(50)
-        if (error) throw error
-        setAlerts(data || [])
-      } catch (e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
+  async function fetchAlerts() {
+    try {
+      const orgId = await getOrCreateOrg()
+      const { data, error } = await supabase
+        .from("alerts")
+        .select("*")
+        .eq("organization_id", orgId)
+        .order("sent_at", { ascending: false })
+        .limit(50)
+      if (error) throw error
+      setAlerts(data || [])
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
     }
+  }
+
+  useEffect(() => {
     fetchAlerts()
   }, [])
 
@@ -49,6 +50,35 @@ export default function Alerts() {
   const acknowledge = async (id: string) => {
     setAlerts(a => a.map(x => x.id === id ? { ...x, is_read: true } : x))
     await supabase.from("alerts").update({ is_read: true }).eq("id", id)
+  }
+
+  const triggerTestAlert = async () => {
+    try {
+      const orgId = await getOrCreateOrg()
+      const severities = ["urgent", "warning", "info", "ok"]
+      const randomSev = severities[Math.floor(Math.random() * severities.length)]
+      
+      const messages: Record<string, string[]> = {
+        urgent: ["Water main leak detected in Unit 4B", "Server connection lost to IoT gateway", "Fire alarm triggered in North Wing"],
+        warning: ["HVAC unit 2 requires scheduled maintenance", "Tenant 12C rent is 5 days overdue", "Occupancy dropped below 90% target"],
+        info: ["Monthly compliance report generated successfully", "System backup completed", "New vendor added to preferred list"],
+        ok: ["All IoT sensors reporting normal status", "Rent collection hit 100% for this month", "Maintenance queue is completely clear"]
+      }
+      
+      const randomMsg = messages[randomSev][Math.floor(Math.random() * 3)]
+      
+      await supabase.from("alerts").insert({
+        organization_id: orgId,
+        alert_type: "system_test",
+        message: randomMsg,
+        severity: randomSev,
+        is_read: false
+      })
+      
+      fetchAlerts() // Refresh list
+    } catch (e) {
+      console.error("Failed to insert test alert", e)
+    }
   }
 
   useGSAP(() => {
@@ -70,12 +100,20 @@ export default function Alerts() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Active system alerts and notifications.</p>
         </div>
-        <button className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s" }}
-          onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
-          onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0,  duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
-        >
-          <Settings size={14} /> Configure
-        </button>
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button onClick={triggerTestAlert} className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "rgba(59,130,246,0.1)", border: "1px solid rgba(59,130,246,0.2)", color: "#93c5fd", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s" }}
+            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.background = "rgba(59,130,246,0.2)" }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0,  duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.background = "rgba(59,130,246,0.1)" }}
+          >
+            <Zap size={14} /> Test Alert
+          </button>
+          <button className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s" }}
+            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
+            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0,  duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
+          >
+            <Settings size={14} /> Configure
+          </button>
+        </div>
       </header>
 
       <div className="anim-filter" style={{ display: "flex", gap: "10px" }}>

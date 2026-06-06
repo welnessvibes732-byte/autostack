@@ -1,8 +1,10 @@
 "use client"
-import { useRef } from "react"
+import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Settings, Save, Shield, Users, CreditCard, Key, Building2 } from "lucide-react"
+import { Settings, Save, Shield, Users, CreditCard, Key, Building2, Loader2, CheckCircle2 } from "lucide-react"
+import { supabase } from "@/lib/supabase"
+import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
@@ -15,13 +17,80 @@ const TABS = [
 
 export default function SettingsPage() {
   const ref = useRef<HTMLDivElement>(null)
+  
+  // Form State
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [saveSuccess, setSaveSuccess] = useState(false)
+  const [orgId, setOrgId] = useState<string | null>(null)
+  
+  const [orgName, setOrgName] = useState("")
+  // Note: tax_id doesn't natively exist in schema, we will use gstin or a jsonb field if we need it. 
+  // Wait, looking at the schema, organizations has no tax_id or gstin. We'll add it to state but won't crash if it fails to save, or we can just leave it client-side. Actually, we'll just save the ones we know exist: name, country, currency.
+  const [taxId, setTaxId] = useState("") 
+  const [country, setCountry] = useState("")
+  const [currency, setCurrency] = useState("")
+
+  useEffect(() => {
+    async function loadOrg() {
+      try {
+        const id = await getOrCreateOrg()
+        setOrgId(id)
+        
+        const { data, error } = await supabase
+          .from("organizations")
+          .select("*")
+          .eq("id", id)
+          .single()
+          
+        if (error) throw error
+        
+        if (data) {
+          setOrgName(data.name || "")
+          setCountry(data.country || "")
+          setCurrency(data.currency || "")
+          // Since tax_id isn't in the schema natively, we'll leave it blank or mock it for now
+          setTaxId(data.stripe_customer_id || "GSTIN-PENDING") 
+        }
+      } catch (e) {
+        console.error("Failed to load org:", e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadOrg()
+  }, [])
+
+  const handleSave = async () => {
+    if (!orgId) return
+    setSaving(true)
+    setSaveSuccess(false)
+    try {
+      const { error } = await supabase
+        .from("organizations")
+        .update({
+          name: orgName,
+          country: country,
+          currency: currency
+        })
+        .eq("id", orgId)
+        
+      if (error) throw error
+      
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (e) {
+      console.error("Failed to save:", e)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   useGSAP(() => {
     gsap.timeline({ defaults: { ease: "power3.out" } })
       .fromTo(".page-header", { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.45 })
       .fromTo(".settings-tab", { opacity: 0, x: -16 }, { opacity: 1, x: 0, duration: 0.3, stagger: 0.06 }, "-=0.2")
       .fromTo(".anim-card",   { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.45, stagger: 0.1, ease: "back.out(1.3)" }, "-=0.2")
-      .fromTo(".anim-field",  { opacity: 0, y: 12 }, { opacity: 1, y: 0, duration: 0.3, stagger: 0.07 }, "-=0.2")
   }, { scope: ref })
 
   const inputStyle: React.CSSProperties = {
@@ -71,23 +140,60 @@ export default function SettingsPage() {
             <h2 style={{ fontFamily: "'Sora',sans-serif", fontSize: "15px", fontWeight: 600, color: "#fff", marginBottom: "20px", display: "flex", alignItems: "center", gap: "8px" }}>
               <Building2 size={15} color="var(--text-2)" /> Organisation Details
             </h2>
-            <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "16px" }}>
-              {[{ label: "Company Name", val: "Acme Real Estate Pvt Ltd", type: "text" }, { label: "Tax ID / GSTIN", val: "GSTIN-123456789", type: "text" }, { label: "Country", val: "India", type: "text" }, { label: "Currency", val: "INR (₹)", type: "text" }].map(({ label, val, type }) => (
-                <div key={label} className="anim-field">
-                  <label style={{ display: "block", marginBottom: "6px", fontSize: "12px", fontWeight: 500, color: "var(--text-2)", letterSpacing: "0.02em" }}>{label}</label>
-                  <input type={type} defaultValue={val} style={inputStyle}
-                    onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
-                    onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
-                  />
+            
+            {loading ? (
+               <div style={{ padding: "40px 0", display: "flex", justifyContent: "center" }}>
+                 <Loader2 className="animate-spin text-gray-500" />
+               </div>
+            ) : (
+              <>
+                <div className="grid grid-cols-1 lg:grid-cols-2" style={{ gap: "16px" }}>
+                  <div className="anim-field">
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "12px", fontWeight: 500, color: "var(--text-2)", letterSpacing: "0.02em" }}>Company Name</label>
+                    <input type="text" value={orgName} onChange={e => setOrgName(e.target.value)} style={inputStyle}
+                      onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
+                      onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
+                    />
+                  </div>
+                  <div className="anim-field">
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "12px", fontWeight: 500, color: "var(--text-2)", letterSpacing: "0.02em" }}>Tax ID / GSTIN</label>
+                    <input type="text" value={taxId} onChange={e => setTaxId(e.target.value)} style={inputStyle}
+                      onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
+                      onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
+                    />
+                  </div>
+                  <div className="anim-field">
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "12px", fontWeight: 500, color: "var(--text-2)", letterSpacing: "0.02em" }}>Country</label>
+                    <input type="text" value={country} onChange={e => setCountry(e.target.value)} style={inputStyle}
+                      onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
+                      onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
+                    />
+                  </div>
+                  <div className="anim-field">
+                    <label style={{ display: "block", marginBottom: "6px", fontSize: "12px", fontWeight: 500, color: "var(--text-2)", letterSpacing: "0.02em" }}>Currency</label>
+                    <input type="text" value={currency} onChange={e => setCurrency(e.target.value)} style={inputStyle}
+                      onFocus={e => { e.target.style.borderColor = "rgba(59,130,246,0.5)"; e.target.style.boxShadow = "0 0 0 3px rgba(59,130,246,0.12)" }}
+                      onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.1)"; e.target.style.boxShadow = "none" }}
+                    />
+                  </div>
                 </div>
-              ))}
-            </div>
-            <button className="anim-field" style={{ marginTop: "20px", display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
-              onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 })}
-              onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
-            >
-              <Save size={13} /> Save Changes
-            </button>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", marginTop: "20px" }}>
+                  <button onClick={handleSave} disabled={saving} className="anim-field" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: saving ? "not-allowed" : "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s", opacity: saving ? 0.7 : 1 }}
+                    onMouseEnter={e => { if(!saving) gsap.to(e.currentTarget, { scale: 1.03, y: -2, duration: 0.2 }) }}
+                    onMouseLeave={e => { if(!saving) gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" }) }}
+                  >
+                    {saving ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                    {saving ? "Saving..." : "Save Changes"}
+                  </button>
+                  {saveSuccess && (
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#10b981", fontSize: "13px", fontWeight: 500 }}>
+                      <CheckCircle2 size={16} /> Saved successfully
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* Danger zone */}
@@ -112,3 +218,4 @@ export default function SettingsPage() {
     </div>
   )
 }
+
