@@ -76,11 +76,11 @@ export async function POST(req: Request) {
       console.log("No tenant email found. Skipping tenant confirmation, proceeding to vendor assignment.");
     }
 
-    // 4. Automatically Assign Vendor if none is set
+    // 4. Find Eligible Vendors to Broadcast To
     let assignedVendorId = ticket.vendor_id;
     
     if (!assignedVendorId) {
-      console.log("Auto-assigning vendor for ticket:", ticket.id);
+      console.log("Finding eligible vendors to broadcast ticket:", ticket.id);
       
       // Attempt 1: Match both pincode (if available) and category
       let query = supabase
@@ -119,73 +119,55 @@ export async function POST(req: Request) {
       }
       
       if (vendors && vendors.length > 0) {
-        // Simple assignment: pick the one with highest score (we simplify the algorithm here)
-        const scoredVendors = vendors.map(v => ({
-          ...v,
-          score: (v.is_preferred ? 50 : 0) + ((v.rating || 0) / 5.0 * 50) - ((v.avg_response_hours || 24) * 2)
-        })).sort((a, b) => b.score - a.score);
+        console.log(`Found ${vendors.length} vendors. Broadcasting to all of them.`);
         
-        const winningVendor = scoredVendors[0];
-        assignedVendorId = winningVendor.id;
-        
-        // Update the ticket
-        await supabase
-          .from('maintenance_tickets')
-          .update({
-            vendor_id: assignedVendorId,
-            status: 'assigned',
-            assigned_at: new Date().toISOString()
-          })
-          .eq('id', ticket.id);
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL && process.env.NEXT_PUBLIC_APP_URL.startsWith('http') 
+          ? process.env.NEXT_PUBLIC_APP_URL 
+          : "https://autostack-psi.vercel.app";
           
-        console.log("Successfully auto-assigned to vendor:", winningVendor.name);
-      } else {
-        console.log("Absolutely no valid vendors found in the entire organization to auto-assign.");
-      }
-    }
-
-    // 5. Send Email to Assigned Vendor
-    if (assignedVendorId) {
-      const { data: vendorData } = await supabase
-        .from('vendors')
-        .select('id, name, email')
-        .eq('id', assignedVendorId)
-        .single();
-
-      if (vendorData && vendorData.email) {
-        const acceptLink = `http://localhost:3000/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendorData.id}`;
         const tenantName = tenant?.full_name || 'Not specified';
         const tenantPhone = tenant?.phone || 'Not provided';
         
-        const vendorHtml = `
-          <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
-            <p>Hi ${vendorData.name},</p>
-            <p>A new maintenance ticket has been automatically assigned to you.</p>
-            <h3>Job Details:</h3>
-            <ul>
-              <li><strong>Category:</strong> ${ticket.category || 'N/A'}</li>
-              <li><strong>Description:</strong> ${ticket.description || 'N/A'}</li>
-              <li><strong>Priority:</strong> ${ticket.priority || 'Normal'}</li>
-            </ul>
-            <h3>Location & Contact:</h3>
-            <ul>
-              <li><strong>Tenant Name:</strong> ${tenantName}</li>
-              <li><strong>Tenant Phone:</strong> ${tenantPhone}</li>
-              <li><strong>Property Address:</strong> ${propertyAddress} (Unit: ${unitNumber})</li>
-            </ul>
-            <br/>
-            <p><a href="${acceptLink}" style="background-color: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Submit a Quote / Accept Job</a></p>
-            <p>Best regards,</p>
-            <p><strong>The Property Management Team</strong></p>
-          </div>
-        `;
+        // Send Email to all Eligible Vendors
+        const emailPromises = vendors.map(vendorData => {
+          if (!vendorData.email) return Promise.resolve();
+          const acceptLink = `${appUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendorData.id}`;
+          
+          const vendorHtml = `
+            <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
+              <p>Hi ${vendorData.name},</p>
+              <p>A new maintenance job is available in your service area.</p>
+              <h3>Job Details:</h3>
+              <ul>
+                <li><strong>Category:</strong> ${ticket.category || 'N/A'}</li>
+                <li><strong>Description:</strong> ${ticket.description || 'N/A'}</li>
+                <li><strong>Priority:</strong> ${ticket.priority || 'Normal'}</li>
+              </ul>
+              <h3>Location & Contact:</h3>
+              <ul>
+                <li><strong>Tenant Name:</strong> ${tenantName}</li>
+                <li><strong>Tenant Phone:</strong> ${tenantPhone}</li>
+                <li><strong>Property Address:</strong> ${propertyAddress} (Unit: ${unitNumber})</li>
+              </ul>
+              <br/>
+              <p><a href="${acceptLink}" style="background-color: #000; color: #fff; padding: 10px 20px; text-decoration: none; border-radius: 4px;">Submit a Quote / Accept Job</a></p>
+              <p>Best regards,</p>
+              <p><strong>The Property Management Team</strong></p>
+            </div>
+          `;
 
-        await sendEmail({
-          to: vendorData.email,
-          subject: `New Maintenance Job Assigned: ${ticket.category || 'Repair'}`,
-          html: vendorHtml,
-          text: `Hi ${vendorData.name}, you have a new job for ${ticket.category} at ${propertyAddress}.`,
-        }).catch(e => console.error("Failed to send vendor notification:", e));
+          return sendEmail({
+            to: vendorData.email,
+            subject: `New Maintenance Job Available: ${ticket.category || 'Repair'}`,
+            html: vendorHtml,
+            text: `Hi ${vendorData.name}, a new job for ${ticket.category} at ${propertyAddress} is available.`,
+          }).catch(e => console.error("Failed to send vendor notification to", vendorData.email, e));
+        });
+        
+        await Promise.all(emailPromises);
+        console.log("Broadcasted emails to all eligible vendors.");
+      } else {
+        console.log("Absolutely no valid vendors found in the entire organization to broadcast to.");
       }
     }
 
