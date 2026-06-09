@@ -495,3 +495,40 @@ CREATE TABLE subscriptions (
   created_at             TIMESTAMPTZ DEFAULT now(),
   updated_at             TIMESTAMPTZ DEFAULT now()
 );
+
+---
+
+## DOUBLE-ENTRY LEDGER (Accounting & Telemetry)
+
+CREATE TABLE accounts (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  code            TEXT NOT NULL,
+  name            TEXT NOT NULL,
+  type            TEXT NOT NULL CHECK (type IN ('asset', 'liability', 'equity', 'revenue', 'expense')),
+  created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE journal_entries (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  organization_id UUID REFERENCES organizations(id) ON DELETE CASCADE,
+  posted_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  description     TEXT,
+  created_at      TIMESTAMPTZ DEFAULT now()
+);
+
+CREATE TABLE ledger_lines (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  journal_entry_id UUID REFERENCES journal_entries(id) ON DELETE CASCADE,
+  account_id      UUID REFERENCES accounts(id) ON DELETE RESTRICT,
+  debit           NUMERIC(12,2) DEFAULT 0,
+  credit          NUMERIC(12,2) DEFAULT 0,
+  CONSTRAINT check_debit_credit CHECK (
+    (debit > 0 AND credit = 0) OR (debit = 0 AND credit > 0)
+  )
+);
+
+CREATE INDEX idx_accounts_org ON accounts(organization_id);
+CREATE INDEX idx_journal_org ON journal_entries(organization_id);
+CREATE INDEX idx_ledger_journal ON ledger_lines(journal_entry_id);
+CREATE INDEX idx_ledger_account ON ledger_lines(account_id);

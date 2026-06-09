@@ -9,7 +9,7 @@ import { useGSAP } from "@gsap/react"
 import {
   LayoutDashboard, Building2, KeySquare, Users, UserPlus, Wrench,
   FileText, Search, BarChart3, Receipt, BellRing, Link2, Settings, LogOut,
-  ChevronLeft, Menu, X, CheckSquare, Truck
+  ChevronLeft, Menu, X, CheckSquare, Truck, IndianRupee
 } from "lucide-react"
 
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
@@ -27,6 +27,7 @@ const navItems = [
   { name: "Documents",    href: "/app/documents",    icon: FileText },
   { name: "AI Search",    href: "/app/search",       icon: Search },
   { name: "Analytics",    href: "/app/analytics",    icon: BarChart3 },
+  { name: "Finance",      href: "/app/finance",      icon: IndianRupee },
   { name: "Invoices",     href: "/app/invoices",     icon: Receipt },
   { name: "Approvals",    href: "/app/approvals",    icon: CheckSquare },
   { name: "Alerts",       href: "/app/alerts",       icon: BellRing },
@@ -63,8 +64,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           }
           await fetchCounts()
           
+          const channelId = `approvals-badge-realtime-${Math.random()}`
           channel = supabase
-            .channel('approvals-badge-realtime')
+            .channel(channelId)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices', filter: `organization_id=eq.${orgId}` }, fetchCounts)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'maintenance_tickets', filter: `organization_id=eq.${orgId}` }, fetchCounts)
             .on('postgres_changes', { event: '*', schema: 'public', table: 'leads', filter: `organization_id=eq.${orgId}` }, fetchCounts)

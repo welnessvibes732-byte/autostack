@@ -96,7 +96,14 @@ export default function Dashboard() {
         const amountPaid = payments.reduce((s, c) => s + (c.amount_paid || 0), 0)
 
         const totalApprovedInvoices = (approvedInvoicesRes.data || []).reduce((s, c) => s + (c.total_amount || 0), 0)
-        const liveNOI = amountPaid - totalApprovedInvoices
+        // Real NOI from actual ledger (GAAP compliant) — falls back to simple calc
+        let liveNOI = amountPaid - totalApprovedInvoices
+        try {
+          const { data: realNoi } = await supabase.rpc('get_real_noi', {
+            p_org_id: org, p_from: startOfMonth, p_to: endOfMonth
+          })
+          if (realNoi !== null && realNoi !== undefined) liveNOI = Number(realNoi)
+        } catch(e) { /* RPC not available, use fallback */ }
 
         const invCount = invCountRes.count || 0
         const leaseCount = leaseCountRes.count || 0
