@@ -30,6 +30,20 @@ export default function ApprovalsPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [orgId, setOrgId] = useState<string>("")
 
+  const postNotification = async (url: string, body: Record<string, any>) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (!session?.access_token) throw new Error("Session expired. Please sign in again.")
+
+    return fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`
+      },
+      body: JSON.stringify(body)
+    })
+  }
+
   useEffect(() => {
     async function init() {
       try {
@@ -93,9 +107,10 @@ export default function ApprovalsPage() {
     const { data } = await supabase
       .from('leases')
       .select(`
-        id, unit_id, tenant_name, tenant_email, tenant_phone, start_date, expiry_date, rent_amount,
+        id, unit_id, start_date, expiry_date, rent_amount,
         lease_status, renewal_status, file_path, created_at,
-        units ( unit_number, properties ( name, city ) )
+        units ( unit_number, properties ( name, city ) ),
+        tenants ( full_name, email, phone )
       `)
       .eq('organization_id', org)
       .eq('lease_status', 'active')
@@ -103,7 +118,13 @@ export default function ApprovalsPage() {
       .order('expiry_date', { ascending: true })
       
     if (data) {
-      setLeases(data.filter(l => !l.renewal_status || l.renewal_status === 'pending' || l.renewal_status === 'offered'))
+      const mapped = data.map((l: any) => ({
+        ...l,
+        tenant_name: l.tenant_name || l.tenants?.full_name || '',
+        tenant_email: l.tenant_email || l.tenants?.email || '',
+        tenant_phone: l.tenant_phone || l.tenants?.phone || ''
+      }))
+      setLeases(mapped.filter(l => !l.renewal_status || l.renewal_status === 'pending' || l.renewal_status === 'offered'))
     }
   }
 
@@ -147,7 +168,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('invoices').update({ status: 'approved', approved_by: currentUser?.id, approved_at: new Date().toISOString() }).eq('id', invoiceId)
       if (error) throw error
       
-      fetch('/api/emails/invoice-approval', { method: 'POST', body: JSON.stringify({ action: "notify_approved", invoice_id: invoiceId }) }).catch(console.error)
+      postNotification('/api/emails/invoice-approval', { action: "notify_approved", invoice_id: invoiceId }).catch(console.error)
       
       setInvoices(prev => prev.filter(i => i.id !== invoiceId))
       toast.success("Invoice approved successfully")
@@ -165,7 +186,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('invoices').update({ status: 'rejected', anomaly_reason: rejectionReason }).eq('id', invoiceId)
       if (error) throw error
 
-      fetch('/api/emails/invoice-approval', { method: 'POST', body: JSON.stringify({ action: "notify_rejected", invoice_id: invoiceId, reason: rejectionReason }) }).catch(console.error)
+      postNotification('/api/emails/invoice-approval', { action: "notify_rejected", invoice_id: invoiceId, reason: rejectionReason }).catch(console.error)
       
       setInvoices(prev => prev.filter(i => i.id !== invoiceId))
       setRejectingId(null)
@@ -185,7 +206,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leases').update({ renewal_status: 'offered' }).eq('id', lease.id)
       if (error) throw error
 
-      fetch('/api/emails/lease-renewal', { method: 'POST', body: JSON.stringify({ action: "send_renewal_offer", lease_id: lease.id, tenant_email: lease.tenant_email }) }).catch(console.error)
+      postNotification('/api/emails/lease-renewal', { action: "send_renewal_offer", lease_id: lease.id, tenant_email: lease.tenant_email }).catch(console.error)
       
       setLeases(prev => prev.map(l => l.id === lease.id ? { ...l, renewal_status: 'offered' } : l))
       toast.success("Renewal offer sent to tenant")
@@ -203,7 +224,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leases').update({ renewal_status: 'renewed' }).eq('id', leaseId)
       if (error) throw error
 
-      fetch('/api/emails/lease-renewal', { method: 'POST', body: JSON.stringify({ action: "notify_renewed", lease_id: leaseId }) }).catch(console.error)
+      postNotification('/api/emails/lease-renewal', { action: "notify_renewed", lease_id: leaseId }).catch(console.error)
       
       setLeases(prev => prev.filter(l => l.id !== leaseId))
       toast.success("Lease marked as renewed")
@@ -235,7 +256,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('maintenance_tickets').update({ status: 'in_progress', assigned_at: new Date().toISOString() }).eq('id', ticket.id)
       if (error) throw error
 
-      fetch('/api/emails/maintenance-approval', { method: 'POST', body: JSON.stringify({ action: "notify_approved", ticket_id: ticket.id }) }).catch(console.error)
+      postNotification('/api/emails/maintenance-approval', { action: "notify_approved", ticket_id: ticket.id }).catch(console.error)
       
       setTickets(prev => prev.filter(t => t.id !== ticket.id))
       toast.success("Quote approved. Vendor notified.")
@@ -253,7 +274,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('maintenance_tickets').update({ status: 'open', actual_cost: null }).eq('id', ticket.id)
       if (error) throw error
 
-      fetch('/api/emails/maintenance-approval', { method: 'POST', body: JSON.stringify({ action: "notify_rejected", ticket_id: ticket.id, reason: rejectionReason }) }).catch(console.error)
+      postNotification('/api/emails/maintenance-approval', { action: "notify_rejected", ticket_id: ticket.id, reason: rejectionReason }).catch(console.error)
       
       setTickets(prev => prev.filter(t => t.id !== ticket.id))
       setRejectingId(null)
@@ -273,7 +294,7 @@ export default function ApprovalsPage() {
       const { error } = await supabase.from('leads').update({ stage: 'pending_signoff' }).eq('id', lead.id)
       if (error) throw error
 
-      fetch('/api/emails/deal-signoff', { method: 'POST', body: JSON.stringify({ action: "notify_signoff_request", lead_id: lead.id }) }).catch(console.error)
+      postNotification('/api/emails/deal-signoff', { action: "notify_signoff_request", lead_id: lead.id }).catch(console.error)
       
       setLeads(prev => prev.map(l => l.id === lead.id ? { ...l, stage: 'pending_signoff' } : l))
       toast.success("Sign-off requested")
@@ -288,10 +309,10 @@ export default function ApprovalsPage() {
     if (!confirm("Confirm deal approval?")) return
     setProcessingId(leadId)
     try {
-      const { error } = await supabase.from('leads').update({ stage: 'won' }).eq('id', leadId)
+      const { error } = await supabase.from('leads').update({ stage: 'closed_won' }).eq('id', leadId)
       if (error) throw error
 
-      fetch('/api/emails/deal-signoff', { method: 'POST', body: JSON.stringify({ action: "notify_approved", lead_id: leadId }) }).catch(console.error)
+      postNotification('/api/emails/deal-signoff', { action: "notify_approved", lead_id: leadId }).catch(console.error)
       
       setLeads(prev => prev.filter(l => l.id !== leadId))
       toast.success("Deal approved")

@@ -28,6 +28,7 @@ const navItems = [
   { name: "AI Search",    href: "/app/search",       icon: Search },
   { name: "Analytics",    href: "/app/analytics",    icon: BarChart3 },
   { name: "Finance",      href: "/app/finance",      icon: IndianRupee },
+  { name: "Rent",         href: "/app/finance/rent", icon: Receipt },
   { name: "Invoices",     href: "/app/invoices",     icon: Receipt },
   { name: "Approvals",    href: "/app/approvals",    icon: CheckSquare },
   { name: "Alerts",       href: "/app/alerts",       icon: BellRing },
@@ -56,7 +57,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           const fetchCounts = async () => {
             const [invoiceCount, leaseCount, maintenanceCount, signoffCount] = await Promise.all([
               supabase.from('invoices').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).in('status', ['received', 'matched', 'flagged']),
-              supabase.from('leases').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('lease_status', 'active').lte('expiry_date', new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]).is('renewal_status', null),
+              supabase.from('leases').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('lease_status', 'active').lte('expiry_date', new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]).or('renewal_status.is.null,renewal_status.eq.pending'),
               supabase.from('maintenance_tickets').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('status', 'quoted').not('actual_cost', 'is', null),
               supabase.from('leads').select('*', { count: 'exact', head: true }).eq('organization_id', orgId).eq('stage', 'pending_signoff')
             ])

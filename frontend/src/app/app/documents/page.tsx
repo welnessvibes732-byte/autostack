@@ -13,6 +13,10 @@ export default function Documents() {
   const [docs, setDocs] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Search & Filter states
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeFilter, setActiveFilter] = useState("All Types")
+
   // Upload states
   const [uploadStatus, setUploadStatus] = useState<'idle'|'uploading'|'processing'|'success'>('idle')
 
@@ -57,7 +61,8 @@ export default function Documents() {
           unit: unitStr,
           date: dateStr,
           status: statusStr,
-          statusColor: color
+          statusColor: color,
+          file_path: d.file_path
         }
       })
       setDocs(transformed)
@@ -119,6 +124,26 @@ export default function Documents() {
     }
   }
 
+  const handleViewDocument = async (filePath: string) => {
+    try {
+      const { data } = supabase.storage.from('documents').getPublicUrl(filePath)
+      if (data?.publicUrl) {
+        window.open(data.publicUrl, '_blank')
+      }
+    } catch (e) {
+      alert("Could not open document.")
+    }
+  }
+
+  const filteredDocs = docs.filter(d => {
+    const q = searchQuery.toLowerCase()
+    if (q && !d.name.toLowerCase().includes(q)) return false
+    
+    if (activeFilter !== "All Types" && activeFilter.toLowerCase() !== d.type.toLowerCase()) return false
+    
+    return true
+  })
+
   useGSAP(() => {
     if (loading) return
     gsap.timeline({ defaults: { ease: "power3.out" } })
@@ -161,21 +186,23 @@ export default function Documents() {
         </div>
       </label>
 
-      {/* Filters */}
       <div className="anim-filter" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <div style={{ position: "relative", flex: 1, maxWidth: "280px" }}>
           <Search size={14} color="var(--text-3)" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-          <input type="text" placeholder="Search filename…" style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
+          <input type="text" placeholder="Search filename…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
             onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,0.4)")}
             onBlur={e => (e.target.style.borderColor = "var(--border-2)")}
           />
         </div>
-        {["All Types","Lease","Invoice","Property","General"].map((f, i) => (
-          <button key={f} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: i === 0 ? "rgba(255,255,255,0.08)" : "transparent", border: i === 0 ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: i === 0 ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
-            onMouseEnter={e => { if(i!==0){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
-            onMouseLeave={e => { if(i!==0){e.currentTarget.style.color="var(--text-3)";e.currentTarget.style.background="transparent"} }}
-          >{f}</button>
-        ))}
+        {["All Types","Lease","Invoice","Property","General"].map((f, i) => {
+          const isActive = activeFilter === f;
+          return (
+            <button key={f} onClick={() => setActiveFilter(f)} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: isActive ? "rgba(255,255,255,0.08)" : "transparent", border: isActive ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: isActive ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
+              onMouseEnter={e => { if(!isActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
+              onMouseLeave={e => { if(!isActive){e.currentTarget.style.color="var(--text-3)";e.currentTarget.style.background="transparent"} }}
+            >{f}</button>
+          )
+        })}
       </div>
 
       {/* Table */}
@@ -200,10 +227,10 @@ export default function Documents() {
                   <td style={{ padding: "14px 18px" }} />
                 </tr>
               ))
-            ) : docs.length === 0 ? (
-              <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--text-3)", fontSize: "14px" }}>No documents uploaded yet.</td></tr>
-            ) : docs.map((doc, i) => (
-              <tr key={doc.id} className="anim-row" style={{ borderBottom: i < docs.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
+            ) : filteredDocs.length === 0 ? (
+              <tr><td colSpan={6} style={{ padding: "40px", textAlign: "center", color: "var(--text-3)", fontSize: "14px" }}>No documents found.</td></tr>
+            ) : filteredDocs.map((doc, i) => (
+              <tr key={doc.id} className="anim-row" style={{ borderBottom: i < filteredDocs.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
@@ -227,7 +254,7 @@ export default function Documents() {
                   </span>
                 </td>
                 <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                  <button style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "color 0.15s" }}
+                  <button onClick={() => handleViewDocument(doc.file_path)} style={{ fontSize: "12px", fontWeight: 500, color: "#93c5fd", background: "none", border: "none", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "color 0.15s" }}
                     onMouseEnter={e => (e.currentTarget.style.color = "#fff")}
                     onMouseLeave={e => (e.currentTarget.style.color = "#93c5fd")}
                   >View →</button>

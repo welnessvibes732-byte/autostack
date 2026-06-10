@@ -1,10 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 import { 
-  FileText, Upload, Plus, CheckCircle2, AlertTriangle, Eye, Loader2, KeySquare, Calendar
+  FileText, Upload, Plus, CheckCircle2, AlertTriangle, Eye, Loader2, KeySquare, Calendar, Building2, User
 } from "lucide-react"
 import toast from "react-hot-toast"
 
@@ -18,12 +18,28 @@ export default function LeasesPage() {
   const [isUploading, setIsUploading] = useState(false)
   const [processingId, setProcessingId] = useState<string | null>(null)
 
+  // Property & Tenant lists for dropdowns
+  const [properties, setProperties] = useState<any[]>([])
+  const [tenantsList, setTenantsList] = useState<any[]>([])
+
   // Create Lease Modal State
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [newLease, setNewLease] = useState({
-    tenant_name: "", tenant_email: "", tenant_phone: "", rent_amount: "", start_date: "", expiry_date: ""
+    tenant_id: "", property_id: "", unit_id: "",
+    rent_amount: "", deposit_amount: "", payment_due_day: "1", lease_type: "residential",
+    start_date: "", expiry_date: "", notice_period_days: "30", notes: ""
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
+  
+  const [availableProperties, setAvailableProperties] = useState<any[]>([])
+  const [availableTenants, setAvailableTenants] = useState<any[]>([])
+
+  // Derived: units for selected property
+  const unitsForSelectedProperty = useMemo(() => {
+    if (!newLease.property_id) return []
+    const prop = availableProperties.find((p: any) => p.id === newLease.property_id)
+    return prop?.units ?? []
+  }, [newLease.property_id, availableProperties])
 
   useEffect(() => {
     init()
@@ -38,6 +54,7 @@ export default function LeasesPage() {
       setOrgId(org)
       
       await fetchLeases(org)
+      await fetchDropdownData(org)
       
       const channelId = `leases-page-${Math.random()}`
       const channel = supabase.channel(channelId)
@@ -67,6 +84,15 @@ export default function LeasesPage() {
       }))
       setLeases(mapped)
     }
+  }
+
+  const fetchDropdownData = async (org: string) => {
+    const [propsRes, tenantsRes] = await Promise.all([
+      supabase.from('properties').select('id, name, units(id, unit_number, status)').eq('organization_id', org),
+      supabase.from('tenants').select('id, full_name, phone').eq('organization_id', org)
+    ])
+    if (propsRes.data) setAvailableProperties(propsRes.data)
+    if (tenantsRes.data) setAvailableTenants(tenantsRes.data)
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -107,42 +133,103 @@ export default function LeasesPage() {
     }
   }
 
+  const resetLeaseForm = () => {
+    setNewLease({
+      tenant_id: "", property_id: "", unit_id: "",
+      rent_amount: "", deposit_amount: "", payment_due_day: "1",
+      lease_type: "residential", notice_period_days: "30", notes: ""
+    })
+  }
+
   const handleCreateLease = async () => {
-    if (!newLease.tenant_name || !newLease.rent_amount || !newLease.start_date || !newLease.expiry_date) {
-      return toast.error("Please fill all required fields")
+    if (!newLease.tenant_id || !newLease.unit_id || !newLease.rent_amount || !newLease.start_date || !newLease.expiry_date) {
+      return toast.error("Please fill all required fields (Tenant, Unit, Rent, Dates)")
     }
     setIsSubmitting(true)
     try {
       if (!orgId) throw new Error("Organization ID missing. Please refresh.")
 
-      // 1. Create the tenant first
-      const { data: tenantData, error: tenantError } = await supabase.from('tenants').insert({
+      const { data: insertedLease, error: leaseError } = await supabase.from('leases').insert({
         organization_id: orgId,
-        full_name: newLease.tenant_name,
-        email: newLease.tenant_email || null,
-        phone: newLease.tenant_phone || '—'
-      }).select('id')
-
-      if (tenantError) throw tenantError
-      if (!tenantData || tenantData.length === 0) throw new Error("Tenant creation failed (no data returned)")
-
-      // 2. Insert the lease linked to the tenant
-      const { error: leaseError } = await supabase.from('leases').insert({
-        organization_id: orgId,
-        tenant_id: tenantData[0].id,
+        tenant_id: newLease.tenant_id,
+        unit_id: newLease.unit_id,
         rent_amount: Number(newLease.rent_amount),
+        deposit_amount: newLease.deposit_amount ? Number(newLease.deposit_amount) : null,
+        payment_due_day: Number(newLease.payment_due_day) || 1,
+        lease_type: newLease.lease_type,
+        notice_period_days: Number(newLease.notice_period_days) || 30,
+        notes: newLease.notes || null,
         start_date: newLease.start_date,
         expiry_date: newLease.expiry_date,
         lease_status: 'active',
         renewal_status: 'pending'
-      })
+      }).select().single()
       
       if (leaseError) throw leaseError
 
+      // Update unit status to occupied
+      await supabase.from('units').update({ status: 'occupied' }).eq('id', newLease.unit_id)
+
+      // Auto-generate Security Deposit record if applicable
+      if (newLease.deposit_amount && Number(newLease.deposit_amount) > 0) {
+        await supabase.from('security_deposits').insert({
+          organization_id: orgId,
+          lease_id: insertedLease.id,
+          tenant_id: newLease.tenant_id,
+          unit_id: newLease.unit_id,
+          property_id: newLease.property_id,
+          deposit_amount: Number(newLease.deposit_amount),
+          status: 'received',
+          received_date: new Date().toISOString().split('T')[0]
+        })
+      }
+
+      // Auto-generate rent payments for every month of the lease
+      const paymentsToInsert = [];
+      const start = new Date(newLease.start_date);
+      const end = new Date(newLease.expiry_date);
+      const dueDay = Number(newLease.payment_due_day) || 1;
+      
+      const monthsDiff = (end.getFullYear() - start.getFullYear()) * 12 + (end.getMonth() - start.getMonth());
+      
+      for (let i = 0; i <= monthsDiff; i++) {
+        let dueDate = new Date(start.getFullYear(), start.getMonth() + i, dueDay);
+        // Ensure first payment isn't before start date
+        if (i === 0 && dueDate < start) dueDate = new Date(start);
+        // Ensure last payment isn't after end date
+        if (dueDate > end) break;
+        
+        // Use local format carefully to avoid timezone shift causing previous day string
+        // We use string manipulation to ensure the exact local YYYY-MM-DD
+        const yearStr = dueDate.getFullYear();
+        const monthStr = String(dueDate.getMonth() + 1).padStart(2, '0');
+        const dayStr = String(dueDate.getDate()).padStart(2, '0');
+        const formattedDate = `${yearStr}-${monthStr}-${dayStr}`;
+
+        paymentsToInsert.push({
+          organization_id: orgId,
+          lease_id: insertedLease.id,
+          tenant_id: newLease.tenant_id,
+          unit_id: newLease.unit_id,
+          amount_due: Number(newLease.rent_amount),
+          due_date: formattedDate,
+          status: 'pending'
+        });
+      }
+      
+      if (paymentsToInsert.length > 0) {
+        await supabase.from('rent_payments').insert(paymentsToInsert);
+      }
+
       toast.success("Lease created successfully")
       setShowCreateModal(false)
-      setNewLease({ tenant_name: "", tenant_email: "", tenant_phone: "", rent_amount: "", start_date: "", expiry_date: "" })
+      setNewLease({ 
+        tenant_id: "", property_id: "", unit_id: "",
+        rent_amount: "", deposit_amount: "", payment_due_day: "1", lease_type: "residential",
+        start_date: "", expiry_date: "", notice_period_days: "30", notes: "" 
+      })
       await fetchLeases(orgId)
+      await fetchDropdownData(orgId) // Refresh units status
     } catch (e: any) {
       console.error("Create lease error:", e)
       toast.error(e.message || "Failed to create lease")
@@ -154,11 +241,18 @@ export default function LeasesPage() {
   const handleSendRenewal = async (lease: any) => {
     setProcessingId(lease.id)
     try {
-      const res = await fetch('/api/emails/lease-renewal', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const { error } = await supabase
+        .from('leases')
+        .update({ renewal_status: 'offered' })
+        .eq('id', lease.id)
+        .eq('organization_id', orgId)
+      if (error) throw error
+
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/lease-renewal', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "send_renewal_offer", lease_id: lease.id, tenant_name: lease.tenant_name, tenant_email: lease.tenant_email, unit_id: lease.unit_id, expiry_date: lease.expiry_date, current_rent: lease.rent_amount, organization_id: orgId })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      }).catch(console.error)
       
       setLeases(prev => prev.map(l => l.id === lease.id ? { ...l, renewal_status: 'offered' } : l))
       toast.success("Renewal offer sent to tenant")
@@ -172,11 +266,18 @@ export default function LeasesPage() {
   const handleMarkRenewed = async (leaseId: string) => {
     setProcessingId(leaseId)
     try {
-      const res = await fetch('/api/emails/lease-renewal', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const { error } = await supabase
+        .from('leases')
+        .update({ renewal_status: 'renewed' })
+        .eq('id', leaseId)
+        .eq('organization_id', orgId)
+      if (error) throw error
+
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/lease-renewal', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "mark_renewed", lease_id: leaseId, organization_id: orgId })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      }).catch(console.error)
       
       setLeases(prev => prev.map(l => l.id === leaseId ? { ...l, renewal_status: 'renewed' } : l))
       toast.success("Lease marked as renewed")
@@ -329,34 +430,67 @@ export default function LeasesPage() {
           )}
         </div>
       )}
+      
       {/* Create Lease Modal */}
       {showCreateModal && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]">
-          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-md p-6 shadow-2xl">
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-lg p-6 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-bold text-white">Add New Lease</h2>
-              <button onClick={() => setShowCreateModal(false)} className="text-[#A1A1AA] hover:text-white"><Plus className="rotate-45" size={20}/></button>
+              <button onClick={() => { setShowCreateModal(false); resetLeaseForm() }} className="text-[#A1A1AA] hover:text-white"><Plus className="rotate-45" size={20}/></button>
             </div>
             
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm text-[#A1A1AA] mb-1">Tenant Name *</label>
-                <input value={newLease.tenant_name} onChange={e=>setNewLease({...newLease, tenant_name: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. Jane Doe" />
-              </div>
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm text-[#A1A1AA] mb-1">Email</label>
-                  <input type="email" value={newLease.tenant_email} onChange={e=>setNewLease({...newLease, tenant_email: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="jane@example.com" />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Property *</label>
+                  <select value={newLease.property_id} onChange={e=>setNewLease({...newLease, property_id: e.target.value, unit_id: ""})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                    <option value="">Select Property...</option>
+                    {availableProperties.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
                 </div>
                 <div>
-                  <label className="block text-sm text-[#A1A1AA] mb-1">Phone</label>
-                  <input type="tel" value={newLease.tenant_phone} onChange={e=>setNewLease({...newLease, tenant_phone: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="+1 234 567 890" />
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Unit *</label>
+                  <select value={newLease.unit_id} onChange={e=>setNewLease({...newLease, unit_id: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" disabled={!newLease.property_id}>
+                    <option value="">Select Unit...</option>
+                    {newLease.property_id && availableProperties.find(p => p.id === newLease.property_id)?.units?.map((u: any) => (
+                      <option key={u.id} value={u.id}>Unit {u.unit_number} ({u.status})</option>
+                    ))}
+                  </select>
                 </div>
               </div>
+
               <div>
-                <label className="block text-sm text-[#A1A1AA] mb-1">Monthly Rent *</label>
-                <input type="number" value={newLease.rent_amount} onChange={e=>setNewLease({...newLease, rent_amount: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. 15000" />
+                <label className="block text-sm text-[#A1A1AA] mb-1">Tenant *</label>
+                <select value={newLease.tenant_id} onChange={e=>setNewLease({...newLease, tenant_id: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                  <option value="">Select Tenant...</option>
+                  {availableTenants.map(t => <option key={t.id} value={t.id}>{t.full_name} ({t.phone})</option>)}
+                </select>
+                <p className="text-[10px] text-[#A1A1AA] mt-1">If the tenant isn't listed, please add them in the Tenants section first.</p>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Monthly Rent *</label>
+                  <input type="number" value={newLease.rent_amount} onChange={e=>setNewLease({...newLease, rent_amount: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. 15000" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Security Deposit</label>
+                  <input type="number" value={newLease.deposit_amount} onChange={e=>setNewLease({...newLease, deposit_amount: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. 50000" />
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Payment Due Day</label>
+                  <input type="number" min="1" max="28" value={newLease.payment_due_day} onChange={e=>setNewLease({...newLease, payment_due_day: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="1-28" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Notice Period (Days)</label>
+                  <input type="number" value={newLease.notice_period_days} onChange={e=>setNewLease({...newLease, notice_period_days: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. 30" />
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-[#A1A1AA] mb-1">Start Date *</label>
@@ -367,10 +501,24 @@ export default function LeasesPage() {
                   <input type="date" value={newLease.expiry_date} onChange={e=>setNewLease({...newLease, expiry_date: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" />
                 </div>
               </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Lease Type</label>
+                  <select value={newLease.lease_type} onChange={e=>setNewLease({...newLease, lease_type: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                    <option value="residential">Residential</option>
+                    <option value="commercial">Commercial</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Notes</label>
+                  <textarea value={newLease.notes} onChange={e=>setNewLease({...newLease, notes: e.target.value})} rows={1} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 resize-none" placeholder="Optional notes about this lease..." />
+                </div>
+              </div>
             </div>
 
             <div className="flex gap-3 mt-8">
-              <button onClick={() => setShowCreateModal(false)} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors font-medium">Cancel</button>
+              <button onClick={() => { setShowCreateModal(false); resetLeaseForm() }} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors font-medium">Cancel</button>
               <button onClick={handleCreateLease} disabled={isSubmitting} className="flex-1 px-4 py-2 text-white font-medium text-sm rounded-lg flex justify-center items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", border: "none" }}>
                 {isSubmitting ? <Loader2 size={16} className="animate-spin"/> : "Create Lease"}
               </button>

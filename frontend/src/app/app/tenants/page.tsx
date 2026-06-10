@@ -2,16 +2,61 @@
 import { useRef, useState, useEffect } from "react"
 import gsap from "gsap"
 import { useGSAP } from "@gsap/react"
-import { Plus, Search, Mail, Phone, ExternalLink, Users, X, Loader2 } from "lucide-react"
+import { Plus, Search, Mail, Phone, ExternalLink, Users, X, Loader2, ChevronDown, Trash2 } from "lucide-react"
 import { supabase } from "@/lib/supabase"
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
 
 gsap.registerPlugin(useGSAP)
 
+/* ─── Toast Component ─── */
+function Toast({ message, onClose }: { message: string; onClose: () => void }) {
+  useEffect(() => {
+    const timer = setTimeout(onClose, 3000)
+    return () => clearTimeout(timer)
+  }, [onClose])
+
+  return (
+    <div style={{ position: "fixed", bottom: "24px", right: "24px", zIndex: 200, padding: "12px 20px", borderRadius: "10px", background: "#1E1E1E", border: "1px solid #2A2A2A", color: "#fff", fontSize: "13px", fontFamily: "'DM Sans',sans-serif", boxShadow: "0 8px 24px rgba(0,0,0,0.4)", animation: "toastIn 0.3s ease" }}>
+      {message}
+    </div>
+  )
+}
+
+/* ─── Collapsible Section Component ─── */
+function FormSection({ title, defaultOpen = true, children }: { title: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div style={{ borderBottom: "1px solid #1A1A1A" }}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 0", background: "none", border: "none", cursor: "pointer", color: "#fff", fontSize: "13px", fontWeight: 600, fontFamily: "'DM Sans',sans-serif", letterSpacing: "0.01em" }}
+      >
+        {title}
+        <ChevronDown size={14} color="var(--text-3)" style={{ transform: open ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }} />
+      </button>
+      {open && (
+        <div style={{ paddingBottom: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+          {children}
+        </div>
+      )}
+    </div>
+  )
+}
+
+const labelStyle: React.CSSProperties = { display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }
+const inputStyle: React.CSSProperties = { width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }
+
 export default function Tenants() {
   const ref = useRef<HTMLDivElement>(null)
   const [tenants, setTenants] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("")
+
+  // Toast state
+  const [toastMsg, setToastMsg] = useState<string | null>(null)
 
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
@@ -19,78 +64,106 @@ export default function Tenants() {
   const [form, setForm] = useState({
     full_name: "",
     email: "",
-    phone: ""
+    phone: "",
+    whatsapp_number: "",
+    id_type: "" as "" | "aadhaar" | "pan" | "passport" | "driving_license",
+    id_number: "",
+    date_of_birth: "",
+    employer_name: "",
+    monthly_income: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
+    notes: ""
+  })
+
+  const resetForm = () => setForm({
+    full_name: "", email: "", phone: "", whatsapp_number: "",
+    id_type: "", id_number: "", date_of_birth: "",
+    employer_name: "", monthly_income: "",
+    emergency_contact_name: "", emergency_contact_phone: "", notes: ""
   })
 
   useEffect(() => {
-    async function fetchTenants() {
-      try {
-        const { data, error } = await supabase.from('tenants').select(`
-          *,
-          leases ( lease_status, unit:units ( unit_number, property:properties(name) ) )
-        `)
-        if (error) throw error;
-        
-        const transformed = (data || []).map(t => {
-          const name = t.full_name || 'Unknown Tenant';
-          const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '??';
-          
-          const colors = ['#3b82f6', '#7c3aed', '#f59e0b', '#10b981', '#f43f5e'];
-          const colorIndex = name.length % colors.length;
-          
-          const userLeases = t.leases || [];
-          const numLeases = userLeases.length;
-          
-          let unitDisplay = 'None';
-          let status = 'Inactive';
-          let statusColor = '#f43f5e';
-          
-          if (numLeases > 0) {
-            const activeLease = userLeases.find((l: any) => l.lease_status === 'active') || userLeases[0];
-            if (activeLease) {
-              if (activeLease.lease_status === 'active') {
-                status = 'Active';
-                statusColor = '#10b981';
-              } else {
-                status = 'Past';
-                statusColor = '#f59e0b';
-              }
-              
-              if (activeLease.unit) {
-                unitDisplay = activeLease.unit.unit_number || 'Unassigned';
-                if (activeLease.unit.property?.name) {
-                  unitDisplay += `, ${activeLease.unit.property.name}`;
-                }
-              }
-            }
-          }
-          
-          return {
-            id: t.id,
-            name,
-            initials,
-            color: colors[colorIndex],
-            email: t.email || '—',
-            phone: t.phone || '—',
-            unit: unitDisplay,
-            leases: numLeases,
-            status,
-            statusColor
-          }
-        })
-        setTenants(transformed)
-      } catch(e) {
-        console.error(e)
-      } finally {
-        setLoading(false)
-      }
-    }
     fetchTenants()
   }, [])
 
+  async function fetchTenants() {
+    try {
+      const { data, error } = await supabase.from('tenants').select(`
+        *,
+        leases ( lease_status, unit:units ( unit_number, property:properties(name) ) )
+      `)
+      if (error) throw error;
+      
+      const transformed = (data || []).map(t => {
+        const name = t.full_name || 'Unknown Tenant';
+        const initials = name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase() || '??';
+        
+        const colors = ['#3b82f6', '#7c3aed', '#f59e0b', '#10b981', '#f43f5e'];
+        const colorIndex = name.length % colors.length;
+        
+        const userLeases = t.leases || [];
+        const numLeases = userLeases.length;
+        
+        let unitDisplay = 'None';
+        let status = 'Inactive';
+        let statusColor = '#f43f5e';
+        
+        if (numLeases > 0) {
+          const activeLease = userLeases.find((l: any) => l.lease_status === 'active') || userLeases[0];
+          if (activeLease) {
+            if (activeLease.lease_status === 'active') {
+              status = 'Active';
+              statusColor = '#10b981';
+            } else {
+              status = 'Past';
+              statusColor = '#f59e0b';
+            }
+            
+            if (activeLease.unit) {
+              unitDisplay = activeLease.unit.unit_number || 'Unassigned';
+              if (activeLease.unit.property?.name) {
+                unitDisplay += `, ${activeLease.unit.property.name}`;
+              }
+            }
+          }
+        }
+        
+        return {
+          id: t.id,
+          name,
+          initials,
+          color: colors[colorIndex],
+          email: t.email || '—',
+          phone: t.phone || '—',
+          unit: unitDisplay,
+          leases: numLeases,
+          status,
+          statusColor
+        }
+      })
+      setTenants(transformed)
+    } catch(e) {
+      console.error(e)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // ─── Filtered tenants based on search ───
+  const filteredTenants = tenants.filter(t => {
+    if (!searchQuery.trim()) return true
+    const q = searchQuery.toLowerCase()
+    return (
+      t.name.toLowerCase().includes(q) ||
+      t.email.toLowerCase().includes(q) ||
+      t.phone.toLowerCase().includes(q)
+    )
+  })
+
   const submitTenant = async () => {
-    if (!form.full_name || !form.email) {
-      alert("Please enter at least the Full Name and Email.");
+    if (!form.full_name || !form.phone) {
+      alert("Please enter at least the Full Name and Phone Number.");
       return;
     }
 
@@ -98,20 +171,50 @@ export default function Tenants() {
     try {
       const organization_id = await getOrCreateOrg();
 
-      const { error: insertErr } = await supabase.from('tenants').insert({
+      const insertPayload: Record<string, any> = {
         organization_id,
         full_name: form.full_name,
-        email: form.email,
-        phone: form.phone
-      });
+        email: form.email || null,
+        phone: form.phone,
+      }
+
+      // Only include optional fields if they have values
+      if (form.whatsapp_number) insertPayload.whatsapp_number = form.whatsapp_number
+      if (form.id_type) insertPayload.id_type = form.id_type
+      if (form.id_number) insertPayload.id_number = form.id_number
+      if (form.date_of_birth) insertPayload.date_of_birth = form.date_of_birth
+      if (form.employer_name) insertPayload.employer_name = form.employer_name
+      if (form.monthly_income) insertPayload.monthly_income = parseFloat(form.monthly_income)
+      if (form.emergency_contact_name) insertPayload.emergency_contact_name = form.emergency_contact_name
+      if (form.emergency_contact_phone) insertPayload.emergency_contact_phone = form.emergency_contact_phone
+      if (form.notes) insertPayload.notes = form.notes
+
+      const { error: insertErr } = await supabase.from('tenants').insert(insertPayload);
 
       if (insertErr) throw insertErr;
 
       setShowCreateModal(false);
-      window.location.reload();
+      resetForm();
+      setLoading(true);
+      await fetchTenants();
     } catch (err: any) {
       alert("Error: " + err.message);
+    } finally {
       setIsSubmitting(false);
+    }
+  }
+
+  // ─── Delete Tenant ───
+  const deleteTenant = async (tenantId: string, tenantName: string) => {
+    if (!confirm(`Are you sure you want to delete "${tenantName}"? This action cannot be undone.`)) return;
+
+    try {
+      const { error } = await supabase.from('tenants').delete().eq('id', tenantId);
+      if (error) throw error;
+      setTenants(prev => prev.filter(t => t.id !== tenantId));
+      setToastMsg(`"${tenantName}" deleted successfully.`);
+    } catch (err: any) {
+      alert("Failed to delete tenant: " + err.message);
     }
   }
 
@@ -141,7 +244,7 @@ export default function Tenants() {
 
       <div className="anim-filter" style={{ position: "relative", maxWidth: "320px" }}>
         <Search size={14} color="var(--text-3)" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-        <input type="text" placeholder="Search name, email, phone…" style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
+        <input type="text" placeholder="Search name, email, phone…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
           onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,0.4)")}
           onBlur={e => (e.target.style.borderColor = "var(--border-2)")}
         />
@@ -168,8 +271,8 @@ export default function Tenants() {
                   <td style={{ padding: "14px 18px" }} />
                 </tr>
               ))
-            ) : tenants.map((t, i) => (
-              <tr key={t.id} className="anim-row" style={{ borderBottom: i < tenants.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
+            ) : filteredTenants.map((t, i) => (
+              <tr key={t.id} className="anim-row" style={{ borderBottom: i < filteredTenants.length - 1 ? "1px solid var(--border)" : "none", transition: "background 0.15s" }}
                 onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,0.02)")}
                 onMouseLeave={e => (e.currentTarget.style.background = "transparent")}
               >
@@ -191,10 +294,20 @@ export default function Tenants() {
                   <span style={{ fontSize: "11px", fontWeight: 600, padding: "3px 10px", borderRadius: "99px", background: `${t.statusColor}15`, color: t.statusColor, border: `1px solid ${t.statusColor}30` }}>{t.status}</span>
                 </td>
                 <td style={{ padding: "14px 18px", textAlign: "right" }}>
-                  <button style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s", marginLeft: "auto" }}
-                    onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#93c5fd" }}
-                    onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
-                  ><ExternalLink size={13} /></button>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", justifyContent: "flex-end" }}>
+                    <button
+                      onClick={() => setToastMsg("Tenant details view coming soon")}
+                      style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(59,130,246,0.1)"; e.currentTarget.style.color = "#93c5fd" }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
+                    ><ExternalLink size={13} /></button>
+                    <button
+                      onClick={() => deleteTenant(t.id, t.name)}
+                      style={{ width: "30px", height: "30px", borderRadius: "8px", border: "1px solid var(--border-2)", background: "#0D0D0D", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-3)", transition: "all 0.15s" }}
+                      onMouseEnter={e => { e.currentTarget.style.background = "rgba(244,63,94,0.1)"; e.currentTarget.style.color = "#f43f5e" }}
+                      onMouseLeave={e => { e.currentTarget.style.background = "rgba(255,255,255,0.04)"; e.currentTarget.style.color = "var(--text-3)" }}
+                    ><Trash2 size={13} /></button>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -205,31 +318,100 @@ export default function Tenants() {
       {/* Add Tenant Modal */}
       {showCreateModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "400px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ width: "100%", maxWidth: "540px", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
+            {/* Modal Header */}
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Plus size={18} color="#ec4899" /> Add Tenant</h2>
-              <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
+              <button onClick={() => { setShowCreateModal(false); resetForm() }} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
             </div>
             
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Full Name</label>
-                <input type="text" placeholder="e.g. John Doe" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
+            {/* Scrollable Body */}
+            <div style={{ padding: "8px 24px 24px", overflowY: "auto", flex: 1 }}>
+              {/* Section 1: Basic Info */}
+              <FormSection title="Basic Info" defaultOpen={true}>
+                <div>
+                  <label style={labelStyle}>Full Name *</label>
+                  <input type="text" placeholder="e.g. John Doe" value={form.full_name} onChange={e => setForm({...form, full_name: e.target.value})} style={inputStyle} />
+                </div>
+                <div>
+                  <label style={labelStyle}>Email Address</label>
+                  <input type="email" placeholder="e.g. john@example.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} style={inputStyle} />
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Phone *</label>
+                    <input type="tel" placeholder="+91 98765 43210" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>WhatsApp</label>
+                    <input type="tel" placeholder="+91 98765 43210" value={form.whatsapp_number} onChange={e => setForm({...form, whatsapp_number: e.target.value})} style={inputStyle} />
+                  </div>
+                </div>
+              </FormSection>
 
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Email Address</label>
-                <input type="email" placeholder="e.g. john@example.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
+              {/* Section 2: KYC / Identity */}
+              <FormSection title="KYC / Identity" defaultOpen={false}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>ID Type</label>
+                    <select value={form.id_type} onChange={e => setForm({...form, id_type: e.target.value as any})} style={{ ...inputStyle, appearance: "none", cursor: "pointer" }}>
+                      <option value="">Select…</option>
+                      <option value="aadhaar">Aadhaar</option>
+                      <option value="pan">PAN</option>
+                      <option value="passport">Passport</option>
+                      <option value="driving_license">Driving License</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>ID Number</label>
+                    <input type="text" placeholder="e.g. ABCDE1234F" value={form.id_number} onChange={e => setForm({...form, id_number: e.target.value})} style={inputStyle} />
+                  </div>
+                </div>
+                <div>
+                  <label style={labelStyle}>Date of Birth</label>
+                  <input type="date" value={form.date_of_birth} onChange={e => setForm({...form, date_of_birth: e.target.value})} style={{ ...inputStyle, colorScheme: "dark" }} />
+                </div>
+              </FormSection>
 
-              <div>
-                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Phone Number</label>
-                <input type="tel" placeholder="e.g. +1 234 567 890" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
-              </div>
+              {/* Section 3: Employment */}
+              <FormSection title="Employment" defaultOpen={false}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Employer Name</label>
+                    <input type="text" placeholder="e.g. Acme Corp" value={form.employer_name} onChange={e => setForm({...form, employer_name: e.target.value})} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Monthly Income</label>
+                    <input type="number" placeholder="e.g. 50000" value={form.monthly_income} onChange={e => setForm({...form, monthly_income: e.target.value})} style={inputStyle} />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Section 4: Emergency Contact */}
+              <FormSection title="Emergency Contact" defaultOpen={false}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div>
+                    <label style={labelStyle}>Contact Name</label>
+                    <input type="text" placeholder="e.g. Jane Doe" value={form.emergency_contact_name} onChange={e => setForm({...form, emergency_contact_name: e.target.value})} style={inputStyle} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Contact Phone</label>
+                    <input type="tel" placeholder="+91 98765 43210" value={form.emergency_contact_phone} onChange={e => setForm({...form, emergency_contact_phone: e.target.value})} style={inputStyle} />
+                  </div>
+                </div>
+              </FormSection>
+
+              {/* Section 5: Notes */}
+              <FormSection title="Notes" defaultOpen={false}>
+                <div>
+                  <textarea placeholder="Any additional notes about this tenant…" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={4} style={{ ...inputStyle, height: "auto", padding: "12px 14px", resize: "vertical" }} />
+                </div>
+              </FormSection>
             </div>
 
-            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505" }}>
-              <button onClick={() => setShowCreateModal(false)} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
+            {/* Modal Footer */}
+            <div style={{ padding: "20px 24px", borderTop: "1px solid #1E1E1E", display: "flex", justifyContent: "flex-end", gap: "10px", background: "#050505", flexShrink: 0 }}>
+              <button onClick={() => { setShowCreateModal(false); resetForm() }} style={{ padding: "10px 20px", borderRadius: "10px", background: "transparent", border: "1px solid #1E1E1E", color: "#A1A1AA", cursor: "pointer", fontSize: "13px", fontWeight: 600 }}>Cancel</button>
               <button onClick={submitTenant} disabled={isSubmitting} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: isSubmitting ? "not-allowed" : "pointer", opacity: isSubmitting ? 0.7 : 1 }}>
                 {isSubmitting ? <><Loader2 size={14} className="spin" /> Saving...</> : "Save Tenant"}
               </button>
@@ -238,9 +420,13 @@ export default function Tenants() {
         </div>
       )}
 
+      {/* Toast */}
+      {toastMsg && <Toast message={toastMsg} onClose={() => setToastMsg(null)} />}
+
       <style dangerouslySetInnerHTML={{__html: `
         .spin { animation: spin 1s linear infinite; }
         @keyframes spin { 100% { transform: rotate(360deg); } }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
       `}} />
     </div>
   )

@@ -13,14 +13,26 @@ export default function Properties() {
   const [properties, setProperties] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
+  // Search & filter states
+  const [searchQuery, setSearchQuery] = useState("")
+  const [activeFilter, setActiveFilter] = useState("All")
+
   // Modal states
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [form, setForm] = useState({
     name: "",
     address_line1: "",
+    address_line2: "",
     city: "",
+    state: "",
+    pincode: "",
     property_type: "residential",
+    year_built: "",
+    owner_name: "",
+    owner_phone: "",
+    owner_email: "",
+    notes: "",
     unitsCount: "1"
   })
 
@@ -64,7 +76,8 @@ export default function Properties() {
             occupied: occupiedUnits,
             rent: rentStr,
             status,
-            statusColor
+            statusColor,
+            dbStatus: p.status || 'active'
           }
         })
         setProperties(transformed)
@@ -93,14 +106,23 @@ export default function Properties() {
     try {
       const organization_id = await getOrCreateOrg();
 
-      // 1. Insert property and get its ID
-      const { data: inserted, error: propErr } = await supabase.from('properties').insert({
+      const insertPayload: Record<string, any> = {
         organization_id,
         name: form.name,
         address_line1: form.address_line1,
+        address_line2: form.address_line2 || null,
         city: form.city,
-        property_type: form.property_type
-      }).select('id');
+        state: form.state || null,
+        pincode: form.pincode || null,
+        property_type: form.property_type,
+        year_built: form.year_built ? parseInt(form.year_built, 10) : null,
+        owner_name: form.owner_name || null,
+        owner_phone: form.owner_phone || null,
+        owner_email: form.owner_email || null,
+        notes: form.notes || null
+      };
+
+      const { data: inserted, error: propErr } = await supabase.from('properties').insert(insertPayload).select('id');
 
       if (propErr) throw propErr;
       if (!inserted || inserted.length === 0) throw new Error("Property creation failed (no data returned)");
@@ -207,17 +229,20 @@ export default function Properties() {
       <div className="anim-filter" style={{ display: "flex", gap: "10px", alignItems: "center" }}>
         <div style={{ position: "relative", flex: 1, maxWidth: "300px" }}>
           <Search size={14} color="var(--text-3)" style={{ position: "absolute", left: "12px", top: "50%", transform: "translateY(-50%)", pointerEvents: "none" }} />
-          <input type="text" placeholder="Search properties…" style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
+          <input type="text" placeholder="Search properties…" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} style={{ display: "block", width: "100%", height: "38px", borderRadius: "9px", border: "1px solid var(--border-2)", background: "rgba(0,0,0,0.25)", padding: "0 12px 0 34px", fontSize: "13px", color: "#fff", outline: "none", fontFamily: "'DM Sans',sans-serif", transition: "border-color 0.2s" }}
             onFocus={e => (e.target.style.borderColor = "rgba(59,130,246,0.4)")}
             onBlur={e => (e.target.style.borderColor = "var(--border-2)")}
           />
         </div>
-        {["All","Active","Full","Partial","Vacant"].map((f, i) => (
-          <button key={f} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: i === 0 ? "rgba(255,255,255,0.08)" : "transparent", border: i === 0 ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: i === 0 ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
-            onMouseEnter={e => { if(i!==0){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
-            onMouseLeave={e => { if(i!==0){e.currentTarget.style.color="var(--text-3)";e.currentTarget.style.background="transparent"} }}
-          >{f}</button>
-        ))}
+        {["All","Active","Full","Partial","Vacant"].map(f => {
+          const isActive = activeFilter === f;
+          return (
+            <button key={f} onClick={() => setActiveFilter(f)} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans',sans-serif", background: isActive ? "rgba(255,255,255,0.08)" : "transparent", border: isActive ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: isActive ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
+              onMouseEnter={e => { if(!isActive){e.currentTarget.style.color="#fff";e.currentTarget.style.background="rgba(255,255,255,0.05)"} }}
+              onMouseLeave={e => { if(!isActive){e.currentTarget.style.color=isActive?"#fff":"var(--text-3)";e.currentTarget.style.background=isActive?"rgba(255,255,255,0.08)":"transparent"} }}
+            >{f}</button>
+          );
+        })}
       </div>
 
       {/* Grid */}
@@ -226,7 +251,17 @@ export default function Properties() {
           [1,2,3].map(i => (
             <div key={i} className="skeleton prop-card" style={{ padding: "22px", borderRadius: "16px", background: "var(--surface)", height: "200px" }} />
           ))
-        ) : properties.map(({ id, name, address, units, occupied, rent, status, statusColor }) => (
+        ) : properties.filter(p => {
+          // Search filter
+          const q = searchQuery.toLowerCase();
+          if (q && !p.name.toLowerCase().includes(q) && !p.address.toLowerCase().includes(q)) return false;
+          // Status filter
+          if (activeFilter === "Active") return p.dbStatus === 'active';
+          if (activeFilter === "Full") return p.status === 'Full';
+          if (activeFilter === "Partial") return p.status === 'Partial';
+          if (activeFilter === "Vacant") return p.status === 'Vacant';
+          return true; // "All"
+        }).map(({ id, name, address, units, occupied, rent, status, statusColor }) => (
           <div key={id} className="prop-card" style={{ padding: "22px", borderRadius: "16px", background: "var(--surface)", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "16px", cursor: "pointer", position: "relative", overflow: "hidden" }}
             onMouseEnter={e => gsap.to(e.currentTarget, { y: -4, boxShadow: "0 16px 40px rgba(0,0,0,0.4)", borderColor: "var(--border-2)", duration: 0.25 })}
             onMouseLeave={e => gsap.to(e.currentTarget, { y: 0, boxShadow: "none", borderColor: "var(--border)", duration: 0.35, ease: "back.out(1.5)" })}
@@ -262,7 +297,10 @@ export default function Properties() {
                 <div style={{ fontSize: "11px", color: "var(--text-3)", marginBottom: "2px" }}>Rent/mo</div>
                 <div style={{ fontSize: "14px", fontWeight: 700, color: "#10b981", fontFamily: "'DM Mono',monospace" }}>{rent}</div>
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 500, color: "#93c5fd" }}>
+              <div onClick={(e) => { e.stopPropagation(); /* TODO: navigate to property detail page */ }} style={{ display: "flex", alignItems: "center", gap: "4px", fontSize: "12px", fontWeight: 500, color: "#93c5fd", cursor: "pointer" }}
+                onMouseEnter={e => { e.currentTarget.style.color = "#60a5fa" }}
+                onMouseLeave={e => { e.currentTarget.style.color = "#93c5fd" }}
+              >
                 Details <ChevronRight size={13} />
               </div>
             </div>
@@ -273,13 +311,13 @@ export default function Properties() {
       {/* Add Property Modal */}
       {showCreateModal && (
         <div style={{ position: "fixed", inset: 0, zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,0.6)", backdropFilter: "blur(5px)" }}>
-          <div style={{ width: "480px", maxWidth: "95%", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)" }}>
-            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ width: "580px", maxWidth: "95%", maxHeight: "90vh", background: "#0D0D0D", border: "1px solid #1E1E1E", borderRadius: "20px", overflow: "hidden", boxShadow: "0 24px 50px rgba(0,0,0,0.5)", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "24px", borderBottom: "1px solid #1E1E1E", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
               <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 600, color: "#fff", display: "flex", alignItems: "center", gap: "10px" }}><Plus size={18} color="#ec4899" /> Add Property</h2>
               <button onClick={() => setShowCreateModal(false)} style={{ background: "none", border: "none", color: "var(--text-3)", cursor: "pointer" }}><X size={20} /></button>
             </div>
             
-            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px" }}>
+            <div style={{ padding: "24px", display: "flex", flexDirection: "column", gap: "20px", overflowY: "auto", flex: 1 }}>
               <div>
                 <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Property Name</label>
                 <input type="text" placeholder="e.g. Sunrise Apartments" value={form.name} onChange={e => setForm({...form, name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
@@ -290,18 +328,64 @@ export default function Properties() {
                 <input type="text" placeholder="e.g. 123 Main St" value={form.address_line1} onChange={e => setForm({...form, address_line1: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Address Line 2</label>
+                <input type="text" placeholder="e.g. Suite 200, Floor 3" value={form.address_line2} onChange={e => setForm({...form, address_line2: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>City</label>
-                  <input type="text" placeholder="e.g. New York" value={form.city} onChange={e => setForm({...form, city: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  <input type="text" placeholder="e.g. Mumbai" value={form.city} onChange={e => setForm({...form, city: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
                 </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>State</label>
+                  <input type="text" placeholder="e.g. Maharashtra" value={form.state} onChange={e => setForm({...form, state: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Pincode</label>
+                  <input type="text" placeholder="e.g. 400001" value={form.pincode} onChange={e => setForm({...form, pincode: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <div>
                   <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Property Type</label>
                   <select value={form.property_type} onChange={e => setForm({...form, property_type: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", cursor: "pointer" }}>
                     <option value="residential">Residential</option>
                     <option value="commercial">Commercial</option>
+                    <option value="industrial">Industrial</option>
+                    <option value="mixed">Mixed</option>
                   </select>
                 </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Year Built</label>
+                  <input type="number" min="1900" max="2100" placeholder="e.g. 2020" value={form.year_built} onChange={e => setForm({...form, year_built: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                </div>
+              </div>
+
+              {/* Owner Information */}
+              <div style={{ paddingTop: "4px" }}>
+                <p style={{ fontSize: "11px", color: "var(--text-3)", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 700, marginBottom: "14px", fontFamily: "'DM Mono',monospace" }}>Owner Information</p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Owner Name</label>
+                    <input type="text" placeholder="e.g. Raj Patel" value={form.owner_name} onChange={e => setForm({...form, owner_name: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Owner Phone</label>
+                    <input type="tel" placeholder="e.g. +91 98765 43210" value={form.owner_phone} onChange={e => setForm({...form, owner_phone: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Owner Email</label>
+                    <input type="email" placeholder="e.g. raj@example.com" value={form.owner_email} onChange={e => setForm({...form, owner_email: e.target.value})} style={{ width: "100%", height: "42px", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "0 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif" }} />
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ display: "block", fontSize: "12px", color: "var(--text-3)", marginBottom: "8px", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Notes</label>
+                <textarea placeholder="Any additional notes about this property…" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} rows={3} style={{ width: "100%", borderRadius: "10px", border: "1px solid #1E1E1E", background: "#000", color: "#fff", padding: "12px 14px", fontSize: "14px", outline: "none", fontFamily: "'DM Sans',sans-serif", resize: "vertical" }} />
               </div>
 
               <div>

@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     if (updateErr) throw updateErr;
 
     // 3. Send Native "Closed Won" email
-    if (new_stage === 'closed' && lead.email) {
+    if (new_stage === 'closed_won' && lead.email) {
       try {
         const { sendEmail } = await import('@/lib/email');
         await sendEmail({

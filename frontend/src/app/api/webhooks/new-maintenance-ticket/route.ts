@@ -1,16 +1,50 @@
 import { NextResponse } from "next/server";
 import { sendEmail } from "../../../../lib/email";
-import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
+import {
+  createAdminClient,
+  getBaseUrl,
+  parseJson,
+  requireBearerSecret,
+  signVendorPortalToken,
+  uuidSchema,
+} from "@/lib/api/security";
+
+const webhookPayloadSchema = z.object({
+  record: z.unknown().optional(),
+}).passthrough();
+
+const ticketSchema = z.object({
+  id: uuidSchema,
+  organization_id: uuidSchema,
+  tenant_id: uuidSchema.nullish(),
+  unit_id: uuidSchema.nullish(),
+  vendor_id: uuidSchema.nullish(),
+  category: z.string().max(80).nullish(),
+  description: z.string().max(4000).nullish(),
+  priority: z.string().max(40).nullish(),
+}).passthrough();
 
 export async function POST(req: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const authError = requireBearerSecret(req);
+    if (authError) return authError;
+
+    const parsed = await parseJson(req, webhookPayloadSchema);
+    if (parsed.error) return parsed.error;
+
+    const supabase = createAdminClient();
     
     // Supabase webhook payload usually puts the row in `record`
-    const payload = await req.json();
-    const ticket = payload.record || payload; 
+    const rawTicket = parsed.data.record || parsed.data;
+    const ticketResult = ticketSchema.safeParse(rawTicket);
+    if (!ticketResult.success) {
+      return NextResponse.json(
+        { error: "Invalid ticket payload", details: ticketResult.error.flatten() },
+        { status: 400 }
+      );
+    }
+    const ticket = ticketResult.data;
     
     if (!ticket.tenant_id) {
       console.log("No tenant associated with this ticket. Skipping email.");
@@ -51,7 +85,7 @@ export async function POST(req: Request) {
 
     // 3. Send Email to Tenant (only if we have an email)
     if (tenant && tenant.email) {
-      const trackingLink = `https://your-domain.com/tenant/tickets/${ticket.id}`;
+      const trackingLink = `${getBaseUrl()}/tenant/tickets/${ticket.id}`;
       const tenantHtml = `
         <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">
           <p>Hi ${tenant.full_name},</p>
@@ -121,9 +155,7 @@ export async function POST(req: Request) {
       if (vendors && vendors.length > 0) {
         console.log(`Found ${vendors.length} vendors. Broadcasting to all of them.`);
         
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL && process.env.NEXT_PUBLIC_APP_URL.startsWith('http') 
-          ? process.env.NEXT_PUBLIC_APP_URL 
-          : "https://autostack-psi.vercel.app";
+        const appUrl = getBaseUrl();
           
         const tenantName = tenant?.full_name || 'Not specified';
         const tenantPhone = tenant?.phone || 'Not provided';
@@ -131,7 +163,8 @@ export async function POST(req: Request) {
         // Send Email to all Eligible Vendors
         const emailPromises = vendors.map(vendorData => {
           if (!vendorData.email) return Promise.resolve();
-          const acceptLink = `${appUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendorData.id}`;
+          const token = signVendorPortalToken(ticket.id, vendorData.id, "accept");
+          const acceptLink = `${appUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendorData.id}&token=${encodeURIComponent(token)}`;
           
           const vendorHtml = `
             <div style="font-family: Arial, sans-serif; color: #333; line-height: 1.6;">

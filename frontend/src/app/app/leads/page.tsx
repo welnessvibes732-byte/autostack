@@ -71,7 +71,7 @@ export default function LeadsPage() {
     if (!newLead.full_name) return toast.error("Full Name is required")
     setIsSubmitting(true)
     try {
-      const { error } = await supabase.from('leads').insert({
+      const { data: insertedLead, error } = await supabase.from('leads').insert({
         organization_id: orgId,
         full_name: newLead.full_name,
         email: newLead.email,
@@ -81,14 +81,20 @@ export default function LeadsPage() {
         preferred_area: newLead.preferred_area,
         stage: 'new',
         lead_score: 0
-      })
+      }).select('id').single()
       if (error) throw error
       
       // Ping our fast Next.js route to send the Gmail alert
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session?.access_token) throw new Error("Session expired. Please sign in again.")
+
       fetch('/api/webhooks/new-lead', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newLead)
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`
+        },
+        body: JSON.stringify({ ...newLead, id: insertedLead?.id })
       }).catch(err => console.error("Email alert failed:", err))
 
       toast.success("Lead created successfully. AI Qualification sent.")
@@ -130,14 +136,21 @@ export default function LeadsPage() {
   const handleRequestSignoff = async () => {
     setIsSubmitting(true)
     try {
-      const res = await fetch('/api/emails/deal-signoff', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const { error } = await supabase
+        .from('leads')
+        .update({ stage: 'pending_signoff', notes: JSON.stringify(dealTerms) })
+        .eq('id', selectedLead.id)
+        .eq('organization_id', orgId)
+      if (error) throw error
+
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/deal-signoff', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ 
           action: "request_signoff", lead_id: selectedLead.id, lead_name: selectedLead.full_name,
           organization_id: orgId, requested_by: currentUser?.id, terms: dealTerms
         })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      }).catch(console.error)
       
       setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, stage: 'pending_signoff', notes: JSON.stringify(dealTerms) } : l))
       setSelectedLead({...selectedLead, stage: 'pending_signoff'})
@@ -152,11 +165,18 @@ export default function LeadsPage() {
   const handleApproveDeal = async () => {
     setIsSubmitting(true)
     try {
-      const res = await fetch('/api/emails/deal-signoff', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      const { error } = await supabase
+        .from('leads')
+        .update({ stage: 'closed_won' })
+        .eq('id', selectedLead.id)
+        .eq('organization_id', orgId)
+      if (error) throw error
+
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/deal-signoff', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "approved", lead_id: selectedLead.id, organization_id: orgId, approved_by: currentUser?.id })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      }).catch(console.error)
       
       setLeads(prev => prev.map(l => l.id === selectedLead.id ? { ...l, stage: 'closed_won' } : l))
       setSelectedLead(null)

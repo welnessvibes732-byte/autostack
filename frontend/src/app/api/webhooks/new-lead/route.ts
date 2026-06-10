@@ -1,14 +1,27 @@
 import { NextResponse } from "next/server";
 import { sendEmail } from "../../../../lib/email";
-import { createClient } from "@supabase/supabase-js";
+import { z } from "zod";
+import {
+  getAuthorizedSupabase,
+  jsonError,
+  parseJson,
+  uuidSchema,
+} from "@/lib/api/security";
+
+const leadPayloadSchema = z.object({
+  id: uuidSchema.optional(),
+  full_name: z.string().trim().min(1).max(160),
+  email: z.union([z.string().email(), z.literal("")]).optional(),
+}).passthrough();
 
 export async function POST(req: Request) {
   try {
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const auth = await getAuthorizedSupabase(req);
+    if (!auth) return jsonError("Unauthorized", 401);
     
-    const lead = await req.json();
+    const parsed = await parseJson(req, leadPayloadSchema);
+    if (parsed.error) return parsed.error;
+    const lead = parsed.data;
     
     // If there is no email provided, we cannot qualify them via email
     if (!lead.email) {
@@ -68,7 +81,7 @@ The PropIQ Team`;
       const nextFollowUp = new Date();
       nextFollowUp.setDate(nextFollowUp.getDate() + 2); // Day 2 follow-up
       
-      await supabase.from("leads").update({
+      await auth.supabase.from("leads").update({
         follow_up_day: 0,
         last_contact_at: new Date().toISOString(),
         next_follow_up_at: nextFollowUp.toISOString()

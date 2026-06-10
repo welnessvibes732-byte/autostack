@@ -1,22 +1,31 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// We need the service role key to bypass RLS since the vendor is not authenticated
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
+import {
+  createAdminClient,
+  getBaseUrl,
+  signVendorPortalToken,
+  verifyVendorPortalToken,
+} from '@/lib/api/security';
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const ticket_id = searchParams.get('ticket_id');
   const vendor_id = searchParams.get('vendor_id');
+  const token = searchParams.get('token');
 
   if (!ticket_id || !vendor_id) {
     return new NextResponse('Missing ticket_id or vendor_id', { status: 400 });
   }
 
+  if (!verifyVendorPortalToken({ ticketId: ticket_id, vendorId: vendor_id, purpose: 'accept', token })) {
+    return new NextResponse(
+      generateHtml('Invalid Link', 'This link is invalid or expired', 'Please ask the property manager to resend the vendor invitation.', '#ef4444'),
+      { status: 401, headers: { 'Content-Type': 'text/html' } }
+    );
+  }
+
   try {
+    const supabase = createAdminClient();
+
     // 1. Fetch ticket with details
     const { data: ticket, error: fetchErr } = await supabase
       .from('maintenance_tickets')
@@ -39,8 +48,10 @@ export async function GET(req: Request) {
     // 2. Check if already claimed
     if (ticket.vendor_id) {
       if (ticket.vendor_id === vendor_id) {
+        const quoteToken = signVendorPortalToken(ticket_id, vendor_id, 'quote');
+        const quoteLink = `${getBaseUrl()}/vendor/quote/${ticket_id}?vendor_id=${vendor_id}&token=${encodeURIComponent(quoteToken)}`;
         return new NextResponse(
-          generateHtml('Assigned', 'You are already assigned!', 'You have already claimed this ticket.', '#3b82f6'),
+          generateHtml('Assigned', 'You are already assigned!', `You have already claimed this ticket.<br/><br/><a href="${quoteLink}" style="display: inline-block; background: #fff; color: #000; padding: 10px 16px; border-radius: 8px; font-weight: 700; text-decoration: none;">Submit Quote</a>`, '#3b82f6'),
           { status: 200, headers: { 'Content-Type': 'text/html' } }
         );
       } else {
@@ -63,23 +74,13 @@ export async function GET(req: Request) {
       .from('maintenance_tickets')
       .update({
         vendor_id: vendor_id,
-        status: 'in_progress',
+        status: 'assigned',
         assigned_at: new Date().toISOString()
       })
       .eq('id', ticket_id)
       .is('vendor_id', null); // Optimistic locking
 
-    if (updateErr) {
-      console.error(updateErr);
-      // Fallback message if RLS blocked it (which happens if SUPABASE_SERVICE_ROLE_KEY is missing)
-      if (updateErr.code === '42501' || updateErr.message.includes('row-level security')) {
-         return new NextResponse(
-           generateHtml('Configuration Error', 'System Error', 'Database permission denied. The server needs SUPABASE_SERVICE_ROLE_KEY to complete this action.', '#ef4444'),
-           { status: 500, headers: { 'Content-Type': 'text/html' } }
-         );
-      }
-      throw updateErr;
-    }
+    if (updateErr) throw updateErr;
 
     // Prepare details HTML for the success screen
     const t = ticket as any;
@@ -93,6 +94,8 @@ export async function GET(req: Request) {
     const unitNumber = t.unit?.unit_number ? `Unit: ${t.unit.unit_number}` : '';
     const tenantName = t.tenant?.full_name ? `Tenant: ${t.tenant.full_name}` : '';
     const tenantPhone = t.tenant?.phone ? `Phone: ${t.tenant.phone}` : '';
+    const quoteToken = signVendorPortalToken(ticket_id, vendor_id, 'quote');
+    const quoteLink = `${getBaseUrl()}/vendor/quote/${ticket_id}?vendor_id=${vendor_id}&token=${encodeURIComponent(quoteToken)}`;
 
     const detailsHtml = `
       <div style="text-align: left; background: #111; padding: 20px; border-radius: 12px; margin-top: 25px; border: 1px solid #222;">
@@ -107,6 +110,9 @@ export async function GET(req: Request) {
             ${tenantPhone ? `<p style="margin: 0; color: #ccc; font-size: 14px;"><b>${tenantPhone}</b></p>` : ''}
           </div>
         ` : ''}
+        <div style="margin-top: 20px;">
+          <a href="${quoteLink}" style="display: inline-block; background: #fff; color: #000; padding: 10px 16px; border-radius: 8px; font-weight: 700; text-decoration: none;">Submit Quote</a>
+        </div>
       </div>
     `;
 

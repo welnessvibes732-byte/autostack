@@ -21,8 +21,12 @@ export default function VendorsPage() {
     name: "",
     phone: "",
     email: "",
+    whatsapp_number: "",
     categoryString: "", // comma separated
-    pincodeString: "",  // comma separated
+    address: "",
+    gstin: "",
+    bank_account: "",
+    bank_ifsc: "",
   })
 
   useEffect(() => {
@@ -62,25 +66,28 @@ export default function VendorsPage() {
     try {
       // Parse comma separated strings into arrays
       const categories = newVendor.categoryString.split(',').map(c => c.trim().toLowerCase()).filter(Boolean)
-      const pincodes = newVendor.pincodeString.split(',').map(p => p.trim()).filter(Boolean)
 
       const { error } = await supabase.from('vendors').insert({
         organization_id: orgId,
         name: newVendor.name,
         phone: newVendor.phone,
         email: newVendor.email,
+        whatsapp_number: newVendor.whatsapp_number || null,
         category: categories.length > 0 ? categories : ['general'],
-        service_pincodes: pincodes,
+        address: newVendor.address || null,
+        gstin: newVendor.gstin || null,
+        bank_account: newVendor.bank_account || null,
+        bank_ifsc: newVendor.bank_ifsc || null,
         is_preferred: false,
         is_blacklisted: false,
-        rating: 5.0 // Default rating for new vendors
+        rating: 5.0
       })
 
       if (error) throw error
       
       toast.success("Vendor added successfully")
       setShowCreateModal(false)
-      setNewVendor({ name: "", phone: "", email: "", categoryString: "", pincodeString: "" })
+      setNewVendor({ name: "", phone: "", email: "", whatsapp_number: "", categoryString: "", address: "", gstin: "", bank_account: "", bank_ifsc: "" })
       fetchVendors(orgId)
     } catch (e: any) {
       toast.error(e.message || "Failed to add vendor")
@@ -206,9 +213,11 @@ export default function VendorsPage() {
                           <span key={c} className="text-[10px] px-1.5 py-0.5 rounded bg-[#1E1E1E] border border-white/10 text-[#A1A1AA] capitalize">{c}</span>
                         ))}
                       </div>
-                      <div className="text-[10px] text-[#A1A1AA] max-w-[200px] truncate" title={vendor.service_pincodes?.join(', ')}>
-                        📍 {vendor.service_pincodes?.length ? vendor.service_pincodes.slice(0,3).join(', ') + (vendor.service_pincodes.length > 3 ? '...' : '') : 'All Areas'}
-                      </div>
+                      {vendor.address && (
+                        <div className="text-[10px] text-[#A1A1AA] max-w-[200px] truncate" title={vendor.address}>
+                          📍 {vendor.address}
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 align-top">
                       <div className="flex items-center gap-1 bg-black border border-[#1E1E1E] px-2 py-1 rounded w-fit">
@@ -277,15 +286,35 @@ export default function VendorsPage() {
               </div>
 
               <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">WhatsApp Number</label>
+                <input type="tel" value={newVendor.whatsapp_number} onChange={e=>setNewVendor({...newVendor, whatsapp_number: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="e.g. +91 98765 43210" />
+              </div>
+
+              <div>
                 <label className="block text-sm text-[#A1A1AA] mb-1">Categories (Comma separated)</label>
                 <input value={newVendor.categoryString} onChange={e=>setNewVendor({...newVendor, categoryString: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="e.g. plumbing, electrical, hvac" />
                 <p className="text-[10px] text-[#A1A1AA] mt-1">Used by AI to route specific types of tickets.</p>
               </div>
 
               <div>
-                <label className="block text-sm text-[#A1A1AA] mb-1">Service Pincodes (Comma separated)</label>
-                <input value={newVendor.pincodeString} onChange={e=>setNewVendor({...newVendor, pincodeString: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="e.g. 90210, 90211" />
-                <p className="text-[10px] text-[#A1A1AA] mt-1">Leave blank to service all areas. Used by AI to match vendor to property location.</p>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Address</label>
+                <input value={newVendor.address} onChange={e=>setNewVendor({...newVendor, address: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="Business address" />
+              </div>
+
+              <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">GSTIN</label>
+                <input value={newVendor.gstin} onChange={e=>setNewVendor({...newVendor, gstin: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="e.g. 22AAAAA0000A1Z5" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">Bank Account</label>
+                  <input value={newVendor.bank_account} onChange={e=>setNewVendor({...newVendor, bank_account: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="Account number" />
+                </div>
+                <div>
+                  <label className="block text-sm text-[#A1A1AA] mb-1">IFSC Code</label>
+                  <input value={newVendor.bank_ifsc} onChange={e=>setNewVendor({...newVendor, bank_ifsc: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30 text-sm" placeholder="e.g. SBIN0001234" />
+                </div>
               </div>
             </div>
 

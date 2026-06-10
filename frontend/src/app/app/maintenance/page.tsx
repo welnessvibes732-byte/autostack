@@ -68,16 +68,57 @@ export default function MaintenancePage() {
   const handleApproveQuote = async (ticket: any) => {
     setProcessingId(ticket.id)
     try {
-      const res = await fetch('/api/emails/maintenance-approval', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: "approved", ticket_id: ticket.id, vendor_id: ticket.vendor_id, approved_cost: ticket.actual_cost, organization_id: orgId, approved_by: currentUser?.id })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      const { error } = await supabase
+        .from('maintenance_tickets')
+        .update({ status: 'in_progress', assigned_at: new Date().toISOString() })
+        .eq('id', ticket.id)
+        .eq('organization_id', orgId)
+      if (error) throw error
+
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/maintenance-approval', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ action: "notify_approved", ticket_id: ticket.id, vendor_id: ticket.vendor_id, approved_cost: ticket.actual_cost, organization_id: orgId, approved_by: currentUser?.id })
+      }).catch(console.error)
       
-      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'assigned' } : t))
+      setTickets(prev => prev.map(t => t.id === ticket.id ? { ...t, status: 'in_progress' } : t))
       toast.success("Quote approved. Vendor notified.")
     } catch (e: any) {
       toast.error("Approval failed")
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const handleMarkCompleted = async (ticket: any) => {
+    setProcessingId(ticket.id)
+    const toastId = toast.loading("Marking completed & generating invoice...")
+    try {
+      // 1. Update ticket status
+      const { error: ticketError } = await supabase.from('maintenance_tickets').update({
+        status: 'completed',
+        completed_at: new Date().toISOString()
+      }).eq('id', ticket.id)
+      if (ticketError) throw ticketError
+
+      // 2. Generate Invoice
+      if (ticket.actual_cost && ticket.vendor_id) {
+        await supabase.from('invoices').insert({
+          organization_id: orgId,
+          vendor_id: ticket.vendor_id,
+          maintenance_id: ticket.id,
+          property_id: ticket.property_id || ticket.units?.property_id,
+          total_amount: ticket.actual_cost,
+          status: 'received', // Starts as received so it shows up in "Pending" on Invoices page
+          invoice_date: new Date().toISOString().split('T')[0],
+          invoice_number: `INV-MT-${ticket.id.slice(0, 6).toUpperCase()}`,
+        })
+      }
+
+      toast.success("Job completed & invoice sent to Finance", { id: toastId })
+      await fetchTickets(orgId)
+    } catch (e: any) {
+      toast.error(`Error: ${e.message}`, { id: toastId })
     } finally {
       setProcessingId(null)
     }
@@ -119,10 +160,16 @@ export default function MaintenancePage() {
       
       // Fire off the email notification instantly
       if (newTicket) {
-        fetch('/api/webhooks/new-maintenance-ticket', {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (!session?.access_token) throw new Error("Session expired. Please sign in again.")
+
+        fetch('/api/maintenance/broadcast', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(newTicket)
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.access_token}`
+          },
+          body: JSON.stringify({ ticket_id: newTicket.id })
         }).catch(console.error)
       }
       
@@ -218,6 +265,16 @@ export default function MaintenancePage() {
               {ticket.status === 'open' && (
                 <div className="w-full px-4 py-2 text-sm bg-blue-600/50 text-white/70 rounded-md flex items-center justify-center gap-2 cursor-not-allowed" title="Vendor will be assigned automatically">
                   <Wrench size={14}/> Auto-Assigning...
+                </div>
+              )}
+              {ticket.status === 'in_progress' && (
+                <button onClick={() => handleMarkCompleted(ticket)} disabled={processingId === ticket.id} className="w-full px-4 py-2 bg-green-500/20 text-green-400 font-medium text-sm rounded-lg flex items-center justify-center gap-2 border border-green-500/30 hover:bg-green-500/30 transition-colors disabled:opacity-50">
+                  {processingId === ticket.id ? <Loader2 size={14} className="animate-spin"/> : <CheckCircle2 size={14}/>} Mark Completed
+                </button>
+              )}
+              {ticket.status === 'completed' && (
+                <div className="w-full px-4 py-2 text-sm bg-green-500/10 text-green-500 rounded-md flex items-center justify-center gap-2 cursor-default border border-green-500/20">
+                  <CheckCircle2 size={14}/> Job Done
                 </div>
               )}
               {ticket.photo_url && (

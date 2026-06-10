@@ -1,23 +1,40 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { z } from 'zod'
+import {
+  createAdminClient,
+  parseJson,
+  uuidSchema,
+  verifyVendorPortalToken,
+} from '@/lib/api/security'
 
-const getAdminClient = () => createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+const quoteSchema = z.object({
+  ticket_id: uuidSchema,
+  vendor_id: uuidSchema,
+  token: z.string().min(16),
+  actual_cost: z.coerce.number().positive().max(10_000_000),
+})
 
 export async function GET(req: Request) {
   try {
     const { searchParams } = new URL(req.url)
     const ticket_id = searchParams.get('ticket_id')
+    const vendor_id = searchParams.get('vendor_id')
+    const token = searchParams.get('token')
 
-    if (!ticket_id) return NextResponse.json({ error: 'Missing ticket_id' }, { status: 400 })
+    if (!ticket_id || !vendor_id) {
+      return NextResponse.json({ error: 'Missing ticket_id or vendor_id' }, { status: 400 })
+    }
 
-    const supabaseAdmin = getAdminClient()
+    if (!verifyVendorPortalToken({ ticketId: ticket_id, vendorId: vendor_id, purpose: 'quote', token })) {
+      return NextResponse.json({ error: 'Invalid or expired quote link' }, { status: 401 })
+    }
+
+    const supabaseAdmin = createAdminClient()
     const { data, error } = await supabaseAdmin
       .from('maintenance_tickets')
-      .select('id, title, description, category, priority, status, estimated_cost, actual_cost, created_at')
+      .select('id, title, description, category, priority, status, estimated_cost, actual_cost, created_at, vendor_id')
       .eq('id', ticket_id)
+      .eq('vendor_id', vendor_id)
       .single()
 
     if (error) throw error
@@ -30,21 +47,24 @@ export async function GET(req: Request) {
 
 export async function POST(req: Request) {
   try {
-    const { ticket_id, actual_cost } = await req.json()
+    const parsed = await parseJson(req, quoteSchema)
+    if (parsed.error) return parsed.error
 
-    if (!ticket_id || !actual_cost) {
-      return NextResponse.json({ error: 'Missing ticket_id or actual_cost' }, { status: 400 })
+    const { ticket_id, vendor_id, token, actual_cost } = parsed.data
+    if (!verifyVendorPortalToken({ ticketId: ticket_id, vendorId: vendor_id, purpose: 'quote', token })) {
+      return NextResponse.json({ error: 'Invalid or expired quote link' }, { status: 401 })
     }
 
-    const supabaseAdmin = getAdminClient()
+    const supabaseAdmin = createAdminClient()
 
     const { data, error } = await supabaseAdmin
       .from('maintenance_tickets')
       .update({
-        actual_cost: parseFloat(actual_cost),
+        actual_cost,
         status: 'quoted'
       })
       .eq('id', ticket_id)
+      .eq('vendor_id', vendor_id)
       .select()
       .single()
 

@@ -1,12 +1,29 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { sendEmail } from "@/lib/email";
+import { z } from "zod";
+import {
+  getAuthorizedSupabase,
+  jsonError,
+  parseJson,
+  uuidSchema,
+} from "@/lib/api/security";
+
+const invoiceApprovalSchema = z.object({
+  action: z.enum(["notify_approved", "notify_rejected"]),
+  invoice_id: uuidSchema,
+  reason: z.string().max(1000).optional(),
+});
 
 export async function POST(req: Request) {
   try {
-    const { action, invoice_id, reason } = await req.json();
+    const auth = await getAuthorizedSupabase(req);
+    if (!auth) return jsonError("Unauthorized", 401);
 
-    const { data: invoice } = await supabase
+    const parsed = await parseJson(req, invoiceApprovalSchema);
+    if (parsed.error) return parsed.error;
+    const { action, invoice_id, reason } = parsed.data;
+
+    const { data: invoice } = await auth.supabase
       .from("invoices")
       .select("*, vendors(name, email)")
       .eq("id", invoice_id)

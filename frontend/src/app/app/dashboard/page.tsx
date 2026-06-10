@@ -66,7 +66,7 @@ export default function Dashboard() {
           supabase.from("rent_payments").select("amount_due, amount_paid").eq("organization_id", org).gte("due_date", startOfMonth).lte("due_date", endOfMonth),
           
           supabase.from("invoices").select("*", { count: 'exact', head: true }).eq("organization_id", org).in("status", ["received", "matched", "flagged"]),
-          supabase.from("leases").select("*", { count: 'exact', head: true }).eq("organization_id", org).eq("lease_status", "active").lte("expiry_date", in90Days).is("renewal_status", null),
+          supabase.from("leases").select("*", { count: 'exact', head: true }).eq("organization_id", org).eq("lease_status", "active").lte("expiry_date", in90Days).or("renewal_status.is.null,renewal_status.eq.pending"),
           supabase.from("maintenance_tickets").select("*", { count: 'exact', head: true }).eq("organization_id", org).eq("status", "quoted").not("actual_cost", "is", null),
           supabase.from("leads").select("*", { count: 'exact', head: true }).eq("organization_id", org).eq("stage", "pending_signoff"),
           
@@ -80,7 +80,7 @@ export default function Dashboard() {
           supabase.from("invoices").select("total_amount").eq("organization_id", org).in("status", ["approved", "paid"]),
           
           supabase.from("invoices").select("id, vendor_name, total_amount, created_at").eq("organization_id", org).in("status", ["received", "matched", "flagged"]).order('created_at', { ascending: true }).limit(3),
-          supabase.from("leases").select("id, tenant_name, expiry_date, units(unit_number)").eq("organization_id", org).eq("lease_status", "active").lte("expiry_date", in90Days).is("renewal_status", null).order('expiry_date', { ascending: true }).limit(3),
+          supabase.from("leases").select("id, expiry_date, units(unit_number), tenants(full_name)").eq("organization_id", org).eq("lease_status", "active").lte("expiry_date", in90Days).or("renewal_status.is.null,renewal_status.eq.pending").order('expiry_date', { ascending: true }).limit(3),
           supabase.from("maintenance_tickets").select("id, title, actual_cost").eq("organization_id", org).eq("status", "quoted").not("actual_cost", "is", null).order('priority', { ascending: false }).limit(3),
           supabase.from("leads").select("id, full_name, lead_score").eq("organization_id", org).eq("stage", "pending_signoff").order('lead_score', { ascending: false }).limit(3)
         ])
@@ -156,9 +156,14 @@ export default function Dashboard() {
         })
         setLeaseExpiries(chartData)
 
+        const mappedRecentLeases = (recentLeases.data || []).map((l: any) => ({
+          ...l,
+          tenant_name: l.tenant_name || l.tenants?.full_name || ''
+        }))
+
         setPendingItems({
           invoices: recentInvoices.data || [],
-          leases: recentLeases.data || [],
+          leases: mappedRecentLeases,
           tickets: recentTickets.data || [],
           signoffs: recentLeads.data || []
         })

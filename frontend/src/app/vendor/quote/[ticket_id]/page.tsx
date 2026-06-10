@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useSearchParams } from "next/navigation"
 import { CheckCircle2, AlertTriangle, Loader2, Wrench } from "lucide-react"
 
 export default function VendorQuotePage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const ticketId = params.ticket_id as string
+  const vendorId = searchParams.get("vendor_id") || ""
+  const token = searchParams.get("token") || ""
   
   const [ticket, setTicket] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -18,7 +21,8 @@ export default function VendorQuotePage() {
   useEffect(() => {
     async function fetchTicket() {
       try {
-        const res = await fetch(`/api/vendor/quote?ticket_id=${ticketId}`)
+        const query = new URLSearchParams({ ticket_id: ticketId, vendor_id: vendorId, token })
+        const res = await fetch(`/api/vendor/quote?${query.toString()}`)
         const json = await res.json()
         if (json.error) throw new Error(json.error)
         setTicket(json.data)
@@ -33,8 +37,12 @@ export default function VendorQuotePage() {
         setLoading(false)
       }
     }
-    if (ticketId) fetchTicket()
-  }, [ticketId])
+    if (ticketId && vendorId && token) fetchTicket()
+    else {
+      setError("Missing secure vendor link details")
+      setLoading(false)
+    }
+  }, [ticketId, vendorId, token])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,7 +53,7 @@ export default function VendorQuotePage() {
       const res = await fetch(`/api/vendor/quote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ticket_id: ticketId, actual_cost: quoteAmount })
+        body: JSON.stringify({ ticket_id: ticketId, vendor_id: vendorId, token, actual_cost: quoteAmount })
       })
       const json = await res.json()
       if (json.error) throw new Error(json.error)

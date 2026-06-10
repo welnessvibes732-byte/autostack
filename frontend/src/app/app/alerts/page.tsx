@@ -16,9 +16,9 @@ const SEVERITY_MAP: Record<string, { color: string; bg: string; border: string; 
 }
 
 export default function Alerts() {
-  const ref = useRef<HTMLDivElement>(null)
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [activeFilter, setActiveFilter] = useState("All Alerts")
 
   async function fetchAlerts() {
     try {
@@ -107,7 +107,7 @@ export default function Alerts() {
           >
             <Zap size={14} /> Test Alert
           </button>
-          <button className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s" }}
+          <button onClick={() => alert("Alert configuration settings coming soon!")} className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s" }}
             onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0,  duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
           >
@@ -117,23 +117,36 @@ export default function Alerts() {
       </header>
 
       <div className="anim-filter" style={{ display: "flex", gap: "10px" }}>
-        {["All Alerts", "Urgent", "System", "Warning"].map((f, i) => (
-          <button key={f} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", background: i === 0 ? "rgba(255,255,255,0.08)" : "transparent", border: i === 0 ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: i === 0 ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
-            onMouseEnter={e => { e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)" }}
-            onMouseLeave={e => { if (i !== 0) { e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.background = "transparent" } }}
-          >{f}</button>
-        ))}
+        {["All Alerts", "Urgent", "System", "Warning"].map((f, i) => {
+          const isActive = activeFilter === f;
+          return (
+            <button key={f} onClick={() => setActiveFilter(f)} style={{ padding: "6px 14px", borderRadius: "99px", fontSize: "13px", cursor: "pointer", fontFamily: "'DM Sans', sans-serif", background: isActive ? "rgba(255,255,255,0.08)" : "transparent", border: isActive ? "1px solid rgba(255,255,255,0.15)" : "1px solid var(--border)", color: isActive ? "#fff" : "var(--text-3)", transition: "all 0.2s" }}
+              onMouseEnter={e => { if(!isActive){e.currentTarget.style.color = "#fff"; e.currentTarget.style.background = "rgba(255,255,255,0.06)"} }}
+              onMouseLeave={e => { if(!isActive){e.currentTarget.style.color = "var(--text-3)"; e.currentTarget.style.background = "transparent"} }}
+            >{f}</button>
+          )
+        })}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
         {loading ? (
           [1,2,3].map(i => <div key={i} className="skeleton" style={{ height: "80px", borderRadius: "14px" }} />)
-        ) : alerts.length === 0 ? (
+        ) : alerts.filter(a => {
+            if (activeFilter === "Urgent") return a.severity === "urgent";
+            if (activeFilter === "System") return a.severity === "info";
+            if (activeFilter === "Warning") return a.severity === "warning";
+            return true;
+          }).length === 0 ? (
           <div style={{ padding: "40px", textAlign: "center", color: "var(--text-3)", fontSize: "14px", background: "var(--surface)", borderRadius: "14px", border: "1px solid var(--border)" }}>
             <Bell size={28} style={{ margin: "0 auto 12px", opacity: 0.3 }} />
             <p style={{ margin: 0 }}>No alerts right now. All systems clear!</p>
           </div>
-        ) : alerts.map((alert) => {
+        ) : alerts.filter(a => {
+            if (activeFilter === "Urgent") return a.severity === "urgent";
+            if (activeFilter === "System") return a.severity === "info";
+            if (activeFilter === "Warning") return a.severity === "warning";
+            return true;
+          }).map((alert) => {
           const sev = SEVERITY_MAP[alert.severity] || SEVERITY_MAP["info"]
           const timeAgo = new Date(alert.sent_at || Date.now()).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })
           return (

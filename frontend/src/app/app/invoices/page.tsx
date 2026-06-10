@@ -17,6 +17,8 @@ export default function InvoicesPage() {
   const [invoices, setInvoices] = useState<any[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [processingId, setProcessingId] = useState<string | null>(null)
+  const [showPay, setShowPay] = useState<any>(null)
+  const [payForm, setPayForm] = useState({ paid_method: 'upi', paid_ref: '', paid_date: '' })
 
   useEffect(() => {
     init()
@@ -113,12 +115,26 @@ export default function InvoicesPage() {
         }
       }
 
-      // 2. Trigger Autonomous Approval Flow
-      const res = await fetch('/api/emails/invoice-approval', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: "approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      // 2. Persist approval so ledger triggers and approval history actually run.
+      const { error: approveError } = await supabase
+        .from('invoices')
+        .update({
+          status: 'approved',
+          approved_by: currentUser?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', invoice.id)
+        .eq('organization_id', orgId)
+
+      if (approveError) throw approveError
+
+      // 3. Notify vendor.
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/invoice-approval', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ action: "notify_approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
+      }).catch(console.error)
+      await fetchInvoices(orgId)
       toast.success("Invoice approved & ledger updated")
     } catch (e) {
       toast.error("Approval failed")
@@ -132,11 +148,19 @@ export default function InvoicesPage() {
     if (!reason) return
     setProcessingId(invoiceId)
     try {
-      const res = await fetch('/api/emails/invoice-approval', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: "rejected", invoice_id: invoiceId, organization_id: orgId, rejected_by: currentUser?.id, rejection_reason: reason })
-      })
-      if (!res.ok) throw new Error("Webhook failed")
+      const { error: rejectError } = await supabase
+        .from('invoices')
+        .update({ status: 'rejected', anomaly_reason: reason })
+        .eq('id', invoiceId)
+        .eq('organization_id', orgId)
+      if (rejectError) throw rejectError
+
+      const { data: { session } } = await supabase.auth.getSession()
+      fetch('/api/emails/invoice-approval', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ action: "notify_rejected", invoice_id: invoiceId, organization_id: orgId, rejected_by: currentUser?.id, reason })
+      }).catch(console.error)
+      await fetchInvoices(orgId)
       toast.success("Invoice rejected")
     } catch (e) {
       toast.error("Rejection failed")
@@ -145,7 +169,30 @@ export default function InvoicesPage() {
     }
   }
 
-  const formatCurrency = (val: number) => val ? `₹${val.toLocaleString('en-IN')}` : '-'
+  const handleMarkPaid = async () => {
+    if (!showPay) return
+    setProcessingId(showPay.id)
+    const toastId = toast.loading("Recording payment...")
+    try {
+      const { error } = await supabase.from('invoices').update({
+        status: 'paid',
+        payment_date: payForm.paid_date || new Date().toISOString().split('T')[0],
+        payment_ref: payForm.paid_ref || payForm.paid_method
+      }).eq('id', showPay.id)
+      
+      if (error) throw error
+      
+      toast.success("Payment recorded & ledger updated!", { id: toastId })
+      setShowPay(null)
+      await fetchInvoices(orgId)
+    } catch (e: any) {
+      toast.error(`Failed to record: ${e.message}`, { id: toastId })
+    } finally {
+      setProcessingId(null)
+    }
+  }
+
+  const formatCurrency = (val: number) => val ? `₹${Number(val || 0).toLocaleString('en-IN')}` : '-'
   const getTimeAgo = (dateStr: string) => {
     const diff = Date.now() - new Date(dateStr).getTime()
     const hours = Math.floor(diff / (1000 * 60 * 60))
@@ -207,6 +254,11 @@ export default function InvoicesPage() {
                   {processingId === invoice.id && <Loader2 size={14} className="animate-spin text-white"/>} Approve
                 </button>
               </>
+            )}
+            {invoice.status === 'approved' && (
+              <button onClick={() => { setShowPay(invoice); setPayForm({ paid_method: 'upi', paid_ref: '', paid_date: new Date().toISOString().split('T')[0] }) }} disabled={processingId === invoice.id} className="px-4 py-1.5 bg-green-500 text-white font-bold text-sm rounded-lg flex items-center gap-2 hover:bg-green-600 transition-colors">
+                {processingId === invoice.id ? <Loader2 size={14} className="animate-spin"/> : <IndianRupee size={14}/>} Mark Paid
+              </button>
             )}
           </div>
         </div>

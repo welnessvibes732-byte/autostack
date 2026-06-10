@@ -1,38 +1,26 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+import {
+  getBaseUrl,
+  parseJson,
+  requireUserSupabase,
+  signVendorPortalToken,
+  uuidSchema,
+} from '@/lib/api/security';
 
-const getBaseUrl = () => {
-  if (process.env.NEXT_PUBLIC_SITE_URL) return process.env.NEXT_PUBLIC_SITE_URL;
-  if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
-  return 'http://localhost:3000';
-};
+const broadcastSchema = z.object({
+  ticket_id: uuidSchema,
+});
 
 export async function POST(req: Request) {
   try {
-    const authHeader = req.headers.get('authorization');
-    const token = authHeader?.split('Bearer ')[1];
+    const auth = await requireUserSupabase(req);
+    if (auth.error) return auth.error;
 
-    if (!token) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      }
-    );
-
-    const { ticket_id } = await req.json();
-
-    if (!ticket_id) {
-      return NextResponse.json({ error: 'ticket_id is required' }, { status: 400 });
-    }
+    const parsed = await parseJson(req, broadcastSchema);
+    if (parsed.error) return parsed.error;
+    const { ticket_id } = parsed.data;
+    const { supabase } = auth;
 
     // 1. Fetch ticket details to get category and organization_id
     const { data: ticket, error: ticketErr } = await supabase
@@ -77,7 +65,8 @@ export async function POST(req: Request) {
       const propAddress = ticket.property?.address_line1 || ticket.unit?.property?.address_line1 || 'Unknown Address';
       const tenantName = ticket.tenant?.full_name || 'Not specified';
       const tenantPhone = ticket.tenant?.phone || 'Not specified';
-      const acceptLink = `${baseUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendor.id}`;
+      const token = signVendorPortalToken(ticket.id, vendor.id, 'accept');
+      const acceptLink = `${baseUrl}/api/vendor/accept?ticket_id=${ticket.id}&vendor_id=${vendor.id}&token=${encodeURIComponent(token)}`;
 
       if (vendor.email) {
         await sendEmail({

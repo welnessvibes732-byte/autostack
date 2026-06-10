@@ -1,12 +1,29 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
 import { sendEmail } from "@/lib/email";
+import { z } from "zod";
+import {
+  getAuthorizedSupabase,
+  jsonError,
+  parseJson,
+  uuidSchema,
+} from "@/lib/api/security";
+
+const maintenanceApprovalSchema = z.object({
+  action: z.enum(["notify_approved", "notify_rejected"]),
+  ticket_id: uuidSchema,
+  reason: z.string().max(1000).optional(),
+});
 
 export async function POST(req: Request) {
   try {
-    const { action, ticket_id, reason } = await req.json();
+    const auth = await getAuthorizedSupabase(req);
+    if (!auth) return jsonError("Unauthorized", 401);
 
-    const { data: ticket } = await supabase
+    const parsed = await parseJson(req, maintenanceApprovalSchema);
+    if (parsed.error) return parsed.error;
+    const { action, ticket_id, reason } = parsed.data;
+
+    const { data: ticket } = await auth.supabase
       .from("maintenance_tickets")
       .select("*, vendors(name, email)")
       .eq("id", ticket_id)
