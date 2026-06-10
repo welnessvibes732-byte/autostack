@@ -208,6 +208,7 @@ export default function FinanceDashboard() {
             </h1>
           </div>
           <div className="fin-hero flex gap-3 flex-wrap">
+            <Link href="/app/finance/rent" className="px-4 py-2 bg-green-500/20 text-green-400 font-medium text-sm rounded-full flex items-center gap-2 hover:bg-green-500/30 border border-green-500/30 transition-colors"><Receipt size={16}/>Rent Collection</Link>
             <Link href="/app/finance/transactions" className="px-4 py-2 bg-white text-black font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/90 transition-colors"><Receipt size={16}/>Transactions</Link>
             <Link href="/app/finance/reports" className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/20 transition-colors"><FileText size={16}/>Reports</Link>
             <Link href="/app/finance/deposits" className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/20 transition-colors"><Shield size={16}/>Deposits</Link>
@@ -269,7 +270,7 @@ export default function FinanceDashboard() {
       <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {loading ? [1,2,3,4].map(i => <div key={i} className="h-[90px] bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl animate-pulse"/>) : (
           <>
-            <div className="fin-kpi bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-4 hover:border-white/20 transition-colors cursor-pointer" onClick={() => router.push('/app/finance/charges')}>
+            <div className="fin-kpi bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-4 hover:border-white/20 transition-colors cursor-pointer" onClick={() => router.push('/app/finance/rent')}>
               <span className="text-[10px] text-[#A1A1AA] uppercase tracking-widest">Receivables</span>
               <div className="text-2xl font-medium text-white mt-2">{formatCurrencyL(kpis.accountsReceivable)}</div>
             </div>
