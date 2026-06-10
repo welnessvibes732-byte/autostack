@@ -53,9 +53,20 @@ export default function LeasesPage() {
 
   const fetchLeases = async (org: string) => {
     const { data } = await supabase.from('leases').select(`
-      *, units(unit_number, properties(name, city))
+      *, 
+      units(unit_number, properties(name, city)),
+      tenants(full_name, email, phone)
     `).eq('organization_id', org).order('expiry_date', { ascending: true })
-    if (data) setLeases(data)
+    
+    if (data) {
+      const mapped = data.map((l: any) => ({
+        ...l,
+        tenant_name: l.tenant_name || l.tenants?.full_name || '',
+        tenant_email: l.tenant_email || l.tenants?.email || '',
+        tenant_phone: l.tenant_phone || l.tenants?.phone || ''
+      }))
+      setLeases(mapped)
+    }
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -70,25 +81,26 @@ export default function LeasesPage() {
       const { error: uploadError } = await supabase.storage.from('leases').upload(filePath, file)
       if (uploadError) throw uploadError
 
-      const { data: inserted, error: dbError } = await supabase.from('leases').insert({
+      const { data: inserted, error: dbError } = await supabase.from('documents').insert({
         organization_id: orgId,
         file_name: file.name,
         file_path: filePath,
-        lease_status: 'draft',
-        rent_amount: 0
+        doc_type: 'lease',
+        index_status: 'pending'
       }).select().single()
       if (dbError) throw dbError
 
       if (process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK) {
         fetch(process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: orgId, file_name: file.name, type: 'lease', lease_id: inserted.id })
+          body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: orgId, file_name: file.name, type: 'lease' })
         }).catch(console.error)
       }
 
       toast.success("Lease uploaded! AI is processing data.", { id: toastId })
-    } catch (err) {
-      toast.error("Upload failed", { id: toastId })
+    } catch (err: any) {
+      console.error(err)
+      toast.error(err.message || "Upload failed", { id: toastId })
     } finally {
       setIsUploading(false)
       if (e.target) e.target.value = ""
@@ -101,24 +113,39 @@ export default function LeasesPage() {
     }
     setIsSubmitting(true)
     try {
-      const { error } = await supabase.from('leases').insert({
+      if (!orgId) throw new Error("Organization ID missing. Please refresh.")
+
+      // 1. Create the tenant first
+      const { data: tenantData, error: tenantError } = await supabase.from('tenants').insert({
         organization_id: orgId,
-        tenant_name: newLease.tenant_name,
-        tenant_email: newLease.tenant_email,
-        tenant_phone: newLease.tenant_phone,
+        full_name: newLease.tenant_name,
+        email: newLease.tenant_email || null,
+        phone: newLease.tenant_phone || '—'
+      }).select('id')
+
+      if (tenantError) throw tenantError
+      if (!tenantData || tenantData.length === 0) throw new Error("Tenant creation failed (no data returned)")
+
+      // 2. Insert the lease linked to the tenant
+      const { error: leaseError } = await supabase.from('leases').insert({
+        organization_id: orgId,
+        tenant_id: tenantData[0].id,
         rent_amount: Number(newLease.rent_amount),
         start_date: newLease.start_date,
         expiry_date: newLease.expiry_date,
         lease_status: 'active',
         renewal_status: 'pending'
       })
-      if (error) throw error
+      
+      if (leaseError) throw leaseError
+
       toast.success("Lease created successfully")
       setShowCreateModal(false)
       setNewLease({ tenant_name: "", tenant_email: "", tenant_phone: "", rent_amount: "", start_date: "", expiry_date: "" })
-      fetchLeases(orgId)
+      await fetchLeases(orgId)
     } catch (e: any) {
-      toast.error("Failed to create lease")
+      console.error("Create lease error:", e)
+      toast.error(e.message || "Failed to create lease")
     } finally {
       setIsSubmitting(false)
     }

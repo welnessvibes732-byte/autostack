@@ -94,22 +94,23 @@ export default function Properties() {
       const organization_id = await getOrCreateOrg();
 
       // 1. Insert property and get its ID
-      const { data: newProp, error: propErr } = await supabase.from('properties').insert({
+      const { data: inserted, error: propErr } = await supabase.from('properties').insert({
         organization_id,
         name: form.name,
         address_line1: form.address_line1,
         city: form.city,
         property_type: form.property_type
-      }).select('id').single();
+      }).select('id');
 
       if (propErr) throw propErr;
+      if (!inserted || inserted.length === 0) throw new Error("Property creation failed (no data returned)");
 
       // 2. Generate Units
       const unitsToInsert = [];
       for (let i = 1; i <= unitsNum; i++) {
         unitsToInsert.push({
           organization_id,
-          property_id: newProp.id,
+          property_id: inserted[0].id,
           unit_number: `Unit ${i}`,
           status: 'vacant',
           rent_amount: 0
