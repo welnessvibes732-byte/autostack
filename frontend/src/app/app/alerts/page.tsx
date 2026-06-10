@@ -19,6 +19,7 @@ export default function Alerts() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [activeFilter, setActiveFilter] = useState("All Alerts")
+  const ref = useRef<HTMLDivElement>(null)
 
   async function fetchAlerts() {
     try {
