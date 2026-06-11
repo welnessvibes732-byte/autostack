@@ -135,7 +135,7 @@ export default function InvoicesPage() {
         body: JSON.stringify({ action: "notify_approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
       }).catch(console.error)
       await fetchInvoices(orgId)
-      toast.success("Invoice approved & ledger updated")
+      toast.success("Invoice approved! Now mark it as Paid to record the payment.")
     } catch (e) {
       toast.error("Approval failed")
     } finally {
@@ -182,7 +182,7 @@ export default function InvoicesPage() {
       
       if (error) throw error
       
-      toast.success("Payment recorded & ledger updated!", { id: toastId })
+      toast.success("Payment recorded & expense logged to ledger!", { id: toastId })
       setShowPay(null)
       await fetchInvoices(orgId)
     } catch (e: any) {
@@ -201,18 +201,29 @@ export default function InvoicesPage() {
     return `${Math.floor(hours/24)}d ago`
   }
 
-  const processingInvoices = invoices.filter(i => i.status === 'received')
-  const pendingInvoices = invoices.filter(i => ['matched', 'flagged'].includes(i.status))
-  const archivedInvoices = invoices.filter(i => ['approved', 'rejected', 'paid'].includes(i.status))
+  // FIXED: Proper tab grouping
+  const pendingInvoices = invoices.filter(i => ['received', 'matched', 'flagged'].includes(i.status))
+  const approvedInvoices = invoices.filter(i => i.status === 'approved')
+  const paidInvoices = invoices.filter(i => ['paid', 'rejected'].includes(i.status))
 
-  const renderInvoiceCard = (invoice: any, actions: boolean) => (
+  const renderInvoiceCard = (invoice: any) => {
+    const showApproveReject = ['received', 'matched', 'flagged'].includes(invoice.status)
+    const showPayButton = invoice.status === 'approved'
+
+    return (
     <div key={invoice.id} className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-5 hover:border-white/20 transition-colors">
       <div className="flex flex-col md:flex-row justify-between gap-4">
         <div className="flex-1 space-y-2">
           <div className="flex items-center gap-3">
             <span className="font-semibold text-white text-lg">{invoice.vendors?.name || invoice.vendor_name || 'Processing...'}</span>
-            <span className={`px-2 py-0.5 rounded text-xs border ${invoice.status==='received'?'border-blue-500/20 text-blue-400 bg-blue-500/10':invoice.status==='matched'?'border-green-500/20 text-green-400 bg-green-500/10':invoice.status==='flagged'?'border-red-500/20 text-red-400 bg-red-500/10':'border-[#1E1E1E] text-[#A1A1AA] bg-black'}`}>
-              {invoice.status.toUpperCase()}
+            <span className={`px-2 py-0.5 rounded text-xs border ${
+              invoice.status==='received'?'border-blue-500/20 text-blue-400 bg-blue-500/10':
+              invoice.status==='matched'?'border-green-500/20 text-green-400 bg-green-500/10':
+              invoice.status==='flagged'?'border-red-500/20 text-red-400 bg-red-500/10':
+              invoice.status==='approved'?'border-amber-500/20 text-amber-400 bg-amber-500/10':
+              invoice.status==='paid'?'border-green-500/20 text-green-400 bg-green-500/10':
+              'border-[#1E1E1E] text-[#A1A1AA] bg-black'}`}>
+              {invoice.status === 'approved' ? 'APPROVED — AWAITING PAYMENT' : invoice.status.toUpperCase()}
             </span>
           </div>
           
@@ -247,37 +258,39 @@ export default function InvoicesPage() {
                 title="View Document"
               ><Eye size={16}/></button>
             )}
-            {actions && (
+            {showApproveReject && (
               <>
                 <button onClick={() => handleReject(invoice.id)} disabled={processingId === invoice.id} className="px-3 py-1.5 text-sm bg-red-500/10 text-red-400 hover:bg-red-500/20 rounded-md transition-colors disabled:opacity-50">Reject</button>
-                <button onClick={() => handleApprove(invoice)} disabled={processingId === invoice.id || invoice.is_duplicate} className="px-4 py-1.5 text-black font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #00F0FF, #0047FF)", border: "none" }}>
-                  {processingId === invoice.id && <Loader2 size={14} className="animate-spin text-white"/>} Approve
+                <button onClick={() => handleApprove(invoice)} disabled={processingId === invoice.id || invoice.is_duplicate} className="px-4 py-1.5 text-white font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 transition-opacity disabled:opacity-50" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", border: "none" }}>
+                  {processingId === invoice.id && <Loader2 size={14} className="animate-spin"/>} Approve
                 </button>
               </>
             )}
-            {invoice.status === 'approved' && (
+            {showPayButton && (
               <button onClick={() => { setShowPay(invoice); setPayForm({ paid_method: 'upi', paid_ref: '', paid_date: new Date().toISOString().split('T')[0] }) }} disabled={processingId === invoice.id} className="px-4 py-1.5 bg-green-500 text-white font-bold text-sm rounded-lg flex items-center gap-2 hover:bg-green-600 transition-colors">
-                {processingId === invoice.id ? <Loader2 size={14} className="animate-spin"/> : <IndianRupee size={14}/>} Mark Paid
+                {processingId === invoice.id ? <Loader2 size={14} className="animate-spin"/> : <IndianRupee size={14}/>} Pay Now
               </button>
+            )}
+            {invoice.status === 'paid' && (
+              <span className="px-3 py-1.5 text-sm bg-green-500/10 text-green-400 rounded-md flex items-center gap-1 border border-green-500/20"><CheckCircle2 size={14}/> Paid</span>
             )}
           </div>
         </div>
       </div>
     </div>
-  )
+  )}
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-white mb-1">Invoices <span className="text-xs ml-2 bg-blue-500/10 text-blue-400 px-2 py-1 rounded font-mono border border-blue-500/20">AUTONOMOUS_MODE</span></h1>
-          <p className="text-[#A1A1AA]">AI-powered immutable ledger and duplicate prevention</p>
+          <h1 className="text-3xl font-bold text-white mb-1">Invoices</h1>
+          <p className="text-[#A1A1AA]">Approve vendor invoices and record payments to the ledger</p>
         </div>
         
-        <label className="px-5 py-2.5 text-black font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 cursor-pointer transition-opacity relative overflow-hidden group" style={{ background: "linear-gradient(to right, #00F0FF, #0047FF)", border: "none" }}>
-          <div className="absolute top-0 left-[-100%] w-full h-full bg-white/20 skew-x-12 group-hover:animate-[sweep_1s_ease-in-out_infinite]" />
-          {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Wand2 size={16}/>}
-          {isUploading ? "Autonomous Engine Running..." : "Engage Autonomous Router"}
+        <label className="px-5 py-2.5 text-white font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 cursor-pointer transition-opacity" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", border: "none" }}>
+          {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>}
+          {isUploading ? "Uploading..." : "Upload Invoice"}
           <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileUpload} disabled={isUploading} />
         </label>
       </div>
@@ -285,8 +298,8 @@ export default function InvoicesPage() {
       <div className="flex space-x-1 bg-[#0D0D0D] p-1 rounded-lg border border-[#1E1E1E] w-fit mb-6">
         {[
           { id: "pending", label: "Pending Approval", count: pendingInvoices.length },
-          { id: "processing", label: "Processing (AI)", count: processingInvoices.length },
-          { id: "archived", label: "Paid / Archived", count: archivedInvoices.length }
+          { id: "approved", label: "Awaiting Payment", count: approvedInvoices.length },
+          { id: "paid", label: "Paid / Archived", count: paidInvoices.length }
         ].map(t => (
           <button
             key={t.id} onClick={() => setActiveTab(t.id)}
@@ -306,18 +319,75 @@ export default function InvoicesPage() {
         <div className="space-y-4">
           {activeTab === "pending" && (
             pendingInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No invoices pending approval.</div>
-            : pendingInvoices.map(i => renderInvoiceCard(i, true))
+            : pendingInvoices.map(i => renderInvoiceCard(i))
           )}
           
-          {activeTab === "processing" && (
-            processingInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No invoices currently processing.</div>
-            : processingInvoices.map(i => renderInvoiceCard(i, false))
+          {activeTab === "approved" && (
+            approvedInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><CheckCircle2 className="mx-auto mb-2 opacity-50" size={32}/>No invoices awaiting payment.</div>
+            : approvedInvoices.map(i => renderInvoiceCard(i))
           )}
 
-          {activeTab === "archived" && (
-            archivedInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><FileText className="mx-auto mb-2 opacity-50" size={32}/>No archived invoices.</div>
-            : archivedInvoices.map(i => renderInvoiceCard(i, false))
+          {activeTab === "paid" && (
+            paidInvoices.length === 0 ? <div className="p-10 text-center text-[#A1A1AA] border border-[#1E1E1E] rounded-xl"><FileText className="mx-auto mb-2 opacity-50" size={32}/>No paid or archived invoices.</div>
+            : paidInvoices.map(i => renderInvoiceCard(i))
           )}
+        </div>
+      )}
+
+      {/* Payment Modal */}
+      {showPay && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]" onClick={(e) => { if (e.target === e.currentTarget) setShowPay(null) }}>
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-md p-6 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2"><IndianRupee className="text-green-500" size={20}/> Record Payment</h2>
+              <button onClick={() => setShowPay(null)} className="text-[#A1A1AA] hover:text-white"><Plus className="rotate-45" size={20}/></button>
+            </div>
+
+            <div className="bg-[#141414] rounded-lg p-4 border border-[#1E1E1E] mb-4">
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[#A1A1AA] text-sm">Vendor</span>
+                <span className="text-white font-medium">{showPay.vendors?.name || showPay.vendor_name || 'Unknown'}</span>
+              </div>
+              <div className="flex justify-between items-center mb-2">
+                <span className="text-[#A1A1AA] text-sm">Invoice #</span>
+                <span className="text-white font-medium">{showPay.invoice_number || '---'}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-[#A1A1AA] text-sm">Amount</span>
+                <span className="text-green-400 font-bold text-lg">{formatCurrency(showPay.total_amount)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Payment Method</label>
+                <select value={payForm.paid_method} onChange={e => setPayForm({...payForm, paid_method: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30">
+                  <option value="upi">UPI</option>
+                  <option value="bank_transfer">Bank Transfer (NEFT/RTGS)</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Credit/Debit Card</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Reference / Transaction ID</label>
+                <input type="text" value={payForm.paid_ref} onChange={e => setPayForm({...payForm, paid_ref: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" placeholder="e.g. UPI ref, cheque no..." />
+              </div>
+              <div>
+                <label className="block text-sm text-[#A1A1AA] mb-1">Payment Date</label>
+                <input type="date" value={payForm.paid_date} onChange={e => setPayForm({...payForm, paid_date: e.target.value})} className="w-full bg-black border border-[#1E1E1E] rounded-lg p-2.5 text-white outline-none focus:border-white/30" />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button onClick={() => setShowPay(null)} className="flex-1 px-4 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors font-medium">Cancel</button>
+              <button onClick={handleMarkPaid} disabled={processingId === showPay.id} className="flex-1 px-4 py-2 bg-green-500 hover:bg-green-600 text-white font-bold rounded-lg flex justify-center items-center gap-2 transition-colors disabled:opacity-50">
+                {processingId === showPay.id ? <Loader2 size={16} className="animate-spin"/> : <IndianRupee size={16}/>} Confirm Payment
+              </button>
+            </div>
+
+            <p className="text-xs text-[#A1A1AA] mt-4 text-center">This will record the expense in the double-entry ledger and deduct from your Cash balance.</p>
+          </div>
         </div>
       )}
     </div>

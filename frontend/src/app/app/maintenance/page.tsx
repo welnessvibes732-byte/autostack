@@ -115,7 +115,7 @@ export default function MaintenancePage() {
         })
       }
 
-      toast.success("Job completed & invoice sent to Finance", { id: toastId })
+      toast.success("Job completed! Invoice generated → Go to Invoices tab to approve & pay.", { id: toastId, duration: 5000 })
       await fetchTickets(orgId)
     } catch (e: any) {
       toast.error(`Error: ${e.message}`, { id: toastId })
