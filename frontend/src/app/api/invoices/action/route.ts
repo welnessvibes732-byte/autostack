@@ -26,66 +26,62 @@ export async function POST(req: Request) {
     if (parsed.error) return parsed.error;
     const { invoice_id, action, reason, payment_method, payment_ref, payment_date } = parsed.data;
 
-    // Use admin client so triggers fire without RLS interference
-    const admin = createAdminClient();
+    const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
+    const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY!;
+
+    const updateInvoice = async (status: string, extraData: any = {}) => {
+      const res = await fetch(`${SUPABASE_URL}/rest/v1/invoices?id=eq.${invoice_id}`, {
+        method: 'PATCH',
+        headers: {
+          'apikey': SERVICE_KEY,
+          'Authorization': `Bearer ${SERVICE_KEY}`,
+          'Content-Type': 'application/json',
+          'Prefer': 'return=representation'
+        },
+        body: JSON.stringify({ status, ...extraData })
+      });
+      
+      const txt = await res.text();
+      if (!res.ok) throw new Error(txt || res.statusText);
+      try { return JSON.parse(txt)[0]; } catch(e) { return null; }
+    };
 
     if (action === 'approve') {
-      const { data, error } = await admin
-        .from('invoices')
-        .update({
-          status: 'approved',
+      try {
+        const data = await updateInvoice('approved', {
           approved_by: auth.user.id,
           approved_at: new Date().toISOString()
-        })
-        .eq('id', invoice_id)
-        .select('id, status')
-        .single();
-
-      if (error) {
+        });
+        return NextResponse.json({ success: true, invoice: data });
+      } catch (error: any) {
         console.error('[INVOICE APPROVE ERROR]', error);
         return jsonError(error.message, 500);
       }
-
-      return NextResponse.json({ success: true, invoice: data });
     }
 
     if (action === 'reject') {
-      const { data, error } = await admin
-        .from('invoices')
-        .update({
-          status: 'rejected',
+      try {
+        const data = await updateInvoice('rejected', {
           anomaly_reason: reason || 'Rejected by property manager'
-        })
-        .eq('id', invoice_id)
-        .select('id, status')
-        .single();
-
-      if (error) {
+        });
+        return NextResponse.json({ success: true, invoice: data });
+      } catch (error: any) {
         console.error('[INVOICE REJECT ERROR]', error);
         return jsonError(error.message, 500);
       }
-
-      return NextResponse.json({ success: true, invoice: data });
     }
 
     if (action === 'pay') {
-      const { data, error } = await admin
-        .from('invoices')
-        .update({
-          status: 'paid',
+      try {
+        const data = await updateInvoice('paid', {
           payment_date: payment_date || new Date().toISOString().split('T')[0],
           payment_ref: payment_ref || payment_method || 'direct'
-        })
-        .eq('id', invoice_id)
-        .select('id, status')
-        .single();
-
-      if (error) {
+        });
+        return NextResponse.json({ success: true, invoice: data });
+      } catch (error: any) {
         console.error('[INVOICE PAY ERROR]', error);
         return jsonError(error.message, 500);
       }
-
-      return NextResponse.json({ success: true, invoice: data });
     }
 
     return jsonError('Invalid action', 400);

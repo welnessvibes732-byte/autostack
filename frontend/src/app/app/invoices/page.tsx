@@ -115,7 +115,7 @@ export default function InvoicesPage() {
       toast.success("Invoice approved! Switch to 'Awaiting Payment' tab to pay.", { id: toastId, duration: 5000 })
     } catch (e: any) {
       console.error("Invoice approve error:", e)
-      toast.error(`Approval failed: ${e.message || 'Unknown error'}`, { id: toastId, duration: 6000 })
+      toast.error(`Error: ${e.message || 'Unknown error'}`, { id: toastId, duration: 10000 })
     } finally {
       setProcessingId(null)
     }
