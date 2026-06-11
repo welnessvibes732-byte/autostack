@@ -24,6 +24,7 @@ export default function LeasesPage() {
 
   // Create Lease Modal State
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [selectedLease, setSelectedLease] = useState<any>(null)
   const [newLease, setNewLease] = useState({
     tenant_id: "", property_id: "", unit_id: "",
     rent_amount: "", deposit_amount: "", payment_due_day: "1", lease_type: "residential",
@@ -306,8 +307,8 @@ export default function LeasesPage() {
     return (
       <div key={lease.id} className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl p-5 hover:border-white/20 transition-colors">
         <div className="flex flex-col md:flex-row justify-between gap-4">
-          <div className="flex-1 space-y-2">
-            <div className="flex items-center gap-3">
+          <div className="flex-1 space-y-2 cursor-pointer group" onClick={() => setSelectedLease(lease)}>
+            <div className="flex items-center gap-3 group-hover:underline decoration-white/30 underline-offset-4">
               <span className="font-semibold text-white text-lg">{lease.tenant_name || 'Draft / Processing...'}</span>
               {daysLeft !== null && (
                 <span className={`px-2 py-0.5 rounded text-xs border ${urgencyColor}`}>
@@ -527,6 +528,83 @@ export default function LeasesPage() {
           </div>
         </div>
       )}
+
+      {/* View Lease Details Modal */}
+      {selectedLease && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[100]" onClick={(e) => { if (e.target === e.currentTarget) setSelectedLease(null) }}>
+          <div className="bg-[#0D0D0D] border border-[#1E1E1E] rounded-xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="flex justify-between items-center p-6 border-b border-[#1E1E1E]">
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                <FileText className="text-pink-500" size={20} />
+                Lease Details
+              </h2>
+              <button onClick={() => setSelectedLease(null)} className="text-[#A1A1AA] hover:text-white transition-colors">
+                <Plus className="rotate-45" size={24}/>
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                {/* Tenant Info */}
+                <div className="bg-[#141414] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h3 className="text-xs uppercase tracking-wider text-[#A1A1AA] mb-3 font-semibold flex items-center gap-2"><User size={14}/> Tenant</h3>
+                  <p className="text-white font-medium text-lg mb-1">{selectedLease.tenant_name}</p>
+                  <p className="text-sm text-[#A1A1AA] mb-1">{selectedLease.tenant_email}</p>
+                  <p className="text-sm text-[#A1A1AA]">{selectedLease.tenant_phone}</p>
+                </div>
+
+                {/* Property Info */}
+                <div className="bg-[#141414] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h3 className="text-xs uppercase tracking-wider text-[#A1A1AA] mb-3 font-semibold flex items-center gap-2"><Building2 size={14}/> Property & Unit</h3>
+                  <p className="text-white font-medium text-lg mb-1">{selectedLease.units?.properties?.name || 'Unassigned'}</p>
+                  <p className="text-sm text-[#A1A1AA] mb-1">{selectedLease.units?.properties?.city || 'No City'}, {selectedLease.units?.properties?.state || ''}</p>
+                  <p className="text-sm text-white bg-white/5 w-fit px-2 py-0.5 rounded border border-white/10 mt-2">Unit: {selectedLease.units?.unit_number || 'N/A'}</p>
+                </div>
+
+                {/* Financials */}
+                <div className="bg-[#141414] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h3 className="text-xs uppercase tracking-wider text-[#A1A1AA] mb-3 font-semibold flex items-center gap-2"><span className="text-green-500 font-bold">₹</span> Financials</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center"><span className="text-[#A1A1AA] text-sm">Rent Amount</span><span className="text-white font-medium">{formatCurrency(selectedLease.rent_amount)}/mo</span></div>
+                    <div className="flex justify-between items-center"><span className="text-[#A1A1AA] text-sm">Security Deposit</span><span className="text-white font-medium">{formatCurrency(selectedLease.deposit_amount)}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-[#A1A1AA] text-sm">Due Day</span><span className="text-white font-medium">{selectedLease.payment_due_day ? `${selectedLease.payment_due_day} of month` : 'N/A'}</span></div>
+                  </div>
+                </div>
+
+                {/* Terms */}
+                <div className="bg-[#141414] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h3 className="text-xs uppercase tracking-wider text-[#A1A1AA] mb-3 font-semibold flex items-center gap-2"><Calendar size={14}/> Terms</h3>
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center"><span className="text-[#A1A1AA] text-sm">Start Date</span><span className="text-white font-medium">{selectedLease.start_date ? new Date(selectedLease.start_date).toLocaleDateString() : 'N/A'}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-[#A1A1AA] text-sm">Expiry Date</span><span className="text-white font-medium">{selectedLease.expiry_date ? new Date(selectedLease.expiry_date).toLocaleDateString() : 'N/A'}</span></div>
+                    <div className="flex justify-between items-center"><span className="text-[#A1A1AA] text-sm">Status</span>
+                      <span className={`px-2 py-0.5 text-xs rounded-full border ${selectedLease.lease_status === 'active' ? 'bg-green-500/10 text-green-400 border-green-500/20' : 'bg-red-500/10 text-red-400 border-red-500/20'}`}>
+                        {selectedLease.lease_status?.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                
+              </div>
+
+              {selectedLease.notes && (
+                <div className="bg-[#141414] rounded-lg p-4 border border-[#1E1E1E]">
+                  <h3 className="text-xs uppercase tracking-wider text-[#A1A1AA] mb-2 font-semibold">Notes</h3>
+                  <p className="text-sm text-white/80 leading-relaxed whitespace-pre-wrap">{selectedLease.notes}</p>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-[#1E1E1E] flex justify-end">
+              <button onClick={() => setSelectedLease(null)} className="px-5 py-2 bg-[#1E1E1E] hover:bg-white/20 text-white rounded-lg transition-colors font-medium text-sm">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }
