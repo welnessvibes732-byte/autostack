@@ -137,7 +137,8 @@ export default function LeasesPage() {
     setNewLease({
       tenant_id: "", property_id: "", unit_id: "",
       rent_amount: "", deposit_amount: "", payment_due_day: "1",
-      lease_type: "residential", notice_period_days: "30", notes: ""
+      lease_type: "residential", notice_period_days: "30", notes: "",
+      start_date: "", expiry_date: ""
     })
   }
 
