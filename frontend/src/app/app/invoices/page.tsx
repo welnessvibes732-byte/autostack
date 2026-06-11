@@ -94,28 +94,9 @@ export default function InvoicesPage() {
 
   const handleApprove = async (invoice: any) => {
     setProcessingId(invoice.id)
+    const toastId = toast.loading("Approving invoice...")
     try {
-      // 1. Immutable Ledger Check (Double Billing Prevention)
-      const vName = invoice.vendors?.name || invoice.vendor_name
-      if (vName && invoice.total_amount > 0) {
-        const { data: duplicates } = await supabase.from('invoices')
-          .select('id, created_at, status')
-          .eq('organization_id', orgId)
-          .eq('vendor_name', vName)
-          .eq('total_amount', invoice.total_amount)
-          .neq('id', invoice.id)
-          .gte('created_at', new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString())
-          
-        if (duplicates && duplicates.length > 0) {
-          toast.error("Ledger Block: Possible double-billing detected. Invoice flagged.", { duration: 6000 })
-          await supabase.from('invoices').update({ is_duplicate: true }).eq('id', invoice.id)
-          fetchInvoices(orgId)
-          setProcessingId(null)
-          return
-        }
-      }
-
-      // 2. Persist approval so ledger triggers and approval history actually run.
+      // 1. Persist approval — this fires the ledger trigger automatically
       const { error: approveError } = await supabase
         .from('invoices')
         .update({
@@ -128,16 +109,18 @@ export default function InvoicesPage() {
 
       if (approveError) throw approveError
 
-      // 3. Notify vendor.
+      // 2. Notify vendor (non-blocking)
       const { data: { session } } = await supabase.auth.getSession()
       fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "notify_approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
       }).catch(console.error)
+
       await fetchInvoices(orgId)
-      toast.success("Invoice approved! Now mark it as Paid to record the payment.")
-    } catch (e) {
-      toast.error("Approval failed")
+      toast.success("Invoice approved! Switch to 'Awaiting Payment' tab to pay.", { id: toastId, duration: 5000 })
+    } catch (e: any) {
+      console.error("Invoice approve error:", e)
+      toast.error(`Approval failed: ${e.message || 'Unknown error'}`, { id: toastId, duration: 6000 })
     } finally {
       setProcessingId(null)
     }
