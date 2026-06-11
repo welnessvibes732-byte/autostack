@@ -96,21 +96,16 @@ export default function InvoicesPage() {
     setProcessingId(invoice.id)
     const toastId = toast.loading("Approving invoice...")
     try {
-      // 1. Persist approval — this fires the ledger trigger automatically
-      const { error: approveError } = await supabase
-        .from('invoices')
-        .update({
-          status: 'approved',
-          approved_by: currentUser?.id,
-          approved_at: new Date().toISOString()
-        })
-        .eq('id', invoice.id)
-        .eq('organization_id', orgId)
-
-      if (approveError) throw approveError
-
-      // 2. Notify vendor (non-blocking)
       const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/invoices/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ invoice_id: invoice.id, action: 'approve' })
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Approval failed')
+
+      // Notify vendor (non-blocking)
       fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "notify_approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
@@ -130,23 +125,25 @@ export default function InvoicesPage() {
     const reason = prompt("Enter reason for rejection:")
     if (!reason) return
     setProcessingId(invoiceId)
+    const toastId = toast.loading("Rejecting invoice...")
     try {
-      const { error: rejectError } = await supabase
-        .from('invoices')
-        .update({ status: 'rejected', anomaly_reason: reason })
-        .eq('id', invoiceId)
-        .eq('organization_id', orgId)
-      if (rejectError) throw rejectError
-
       const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/invoices/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ invoice_id: invoiceId, action: 'reject', reason })
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Rejection failed')
+
       fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "notify_rejected", invoice_id: invoiceId, organization_id: orgId, rejected_by: currentUser?.id, reason })
       }).catch(console.error)
       await fetchInvoices(orgId)
-      toast.success("Invoice rejected")
-    } catch (e) {
-      toast.error("Rejection failed")
+      toast.success("Invoice rejected", { id: toastId })
+    } catch (e: any) {
+      toast.error(`Rejection failed: ${e.message}`, { id: toastId })
     } finally {
       setProcessingId(null)
     }
@@ -157,13 +154,20 @@ export default function InvoicesPage() {
     setProcessingId(showPay.id)
     const toastId = toast.loading("Recording payment...")
     try {
-      const { error } = await supabase.from('invoices').update({
-        status: 'paid',
-        payment_date: payForm.paid_date || new Date().toISOString().split('T')[0],
-        payment_ref: payForm.paid_ref || payForm.paid_method
-      }).eq('id', showPay.id)
-      
-      if (error) throw error
+      const { data: { session } } = await supabase.auth.getSession()
+      const res = await fetch('/api/invoices/action', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+        body: JSON.stringify({ 
+          invoice_id: showPay.id, 
+          action: 'pay',
+          payment_method: payForm.paid_method,
+          payment_ref: payForm.paid_ref,
+          payment_date: payForm.paid_date || new Date().toISOString().split('T')[0]
+        })
+      })
+      const result = await res.json()
+      if (!res.ok) throw new Error(result.error || 'Payment failed')
       
       toast.success("Payment recorded & expense logged to ledger!", { id: toastId })
       setShowPay(null)
