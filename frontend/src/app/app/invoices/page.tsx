@@ -96,15 +96,33 @@ export default function InvoicesPage() {
     setProcessingId(invoice.id)
     const toastId = toast.loading("Approving invoice...")
     try {
-      const { error } = await supabase.from('invoices').update({
+      const { data: { session } } = await supabase.auth.getSession()
+
+      // Try direct client-side update first
+      const { data, error } = await supabase.from('invoices').update({
         status: 'approved',
         approved_by: currentUser?.id,
         approved_at: new Date().toISOString()
-      }).eq('id', invoice.id)
-      if (error) throw error
+      }).eq('id', invoice.id).select('id, status')
+
+      if (error) {
+        console.error("Direct update error:", error)
+        throw new Error(error.message)
+      }
+
+      // Check if update actually changed something (data should have 1 row)
+      if (!data || data.length === 0) {
+        console.warn("Direct update returned empty - trying API fallback...")
+        const res = await fetch('/api/invoices/action', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
+          body: JSON.stringify({ invoice_id: invoice.id, action: 'approve' })
+        })
+        const result = await res.json()
+        if (!res.ok) throw new Error(result.error || 'API fallback failed')
+      }
 
       // Notify vendor (non-blocking)
-      const { data: { session } } = await supabase.auth.getSession()
       fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "notify_approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
@@ -114,7 +132,9 @@ export default function InvoicesPage() {
       toast.success("Invoice approved! Switch to 'Awaiting Payment' tab to pay.", { id: toastId, duration: 5000 })
     } catch (e: any) {
       console.error("Invoice approve error:", e)
-      toast.error(`Error: ${e.message || 'Unknown error'}`, { id: toastId, duration: 10000 })
+      const msg = e.message || 'Unknown error'
+      toast.error(`Error: ${msg}`, { id: toastId, duration: 15000 })
+      window.alert("Approve failed: " + msg)
     } finally {
       setProcessingId(null)
     }
