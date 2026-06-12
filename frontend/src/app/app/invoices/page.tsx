@@ -96,16 +96,15 @@ export default function InvoicesPage() {
     setProcessingId(invoice.id)
     const toastId = toast.loading("Approving invoice...")
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/invoices/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-        body: JSON.stringify({ invoice_id: invoice.id, action: 'approve' })
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Approval failed')
+      const { error } = await supabase.from('invoices').update({
+        status: 'approved',
+        approved_by: currentUser?.id,
+        approved_at: new Date().toISOString()
+      }).eq('id', invoice.id)
+      if (error) throw error
 
       // Notify vendor (non-blocking)
+      const { data: { session } } = await supabase.auth.getSession()
       fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "notify_approved", invoice_id: invoice.id, organization_id: orgId, approved_by: currentUser?.id })
@@ -127,15 +126,13 @@ export default function InvoicesPage() {
     setProcessingId(invoiceId)
     const toastId = toast.loading("Rejecting invoice...")
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/invoices/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-        body: JSON.stringify({ invoice_id: invoiceId, action: 'reject', reason })
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Rejection failed')
+      const { error } = await supabase.from('invoices').update({
+        status: 'rejected',
+        anomaly_reason: reason
+      }).eq('id', invoiceId)
+      if (error) throw error
 
+      const { data: { session } } = await supabase.auth.getSession()
       fetch('/api/emails/invoice-approval', {
         method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
         body: JSON.stringify({ action: "notify_rejected", invoice_id: invoiceId, organization_id: orgId, rejected_by: currentUser?.id, reason })
@@ -154,20 +151,12 @@ export default function InvoicesPage() {
     setProcessingId(showPay.id)
     const toastId = toast.loading("Recording payment...")
     try {
-      const { data: { session } } = await supabase.auth.getSession()
-      const res = await fetch('/api/invoices/action', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session?.access_token || ''}` },
-        body: JSON.stringify({ 
-          invoice_id: showPay.id, 
-          action: 'pay',
-          payment_method: payForm.paid_method,
-          payment_ref: payForm.paid_ref,
-          payment_date: payForm.paid_date || new Date().toISOString().split('T')[0]
-        })
-      })
-      const result = await res.json()
-      if (!res.ok) throw new Error(result.error || 'Payment failed')
+      const { error } = await supabase.from('invoices').update({
+        status: 'paid',
+        payment_date: payForm.paid_date || new Date().toISOString().split('T')[0],
+        payment_ref: payForm.paid_ref || payForm.paid_method || 'direct'
+      }).eq('id', showPay.id)
+      if (error) throw error
       
       toast.success("Payment recorded & expense logged to ledger!", { id: toastId })
       setShowPay(null)
