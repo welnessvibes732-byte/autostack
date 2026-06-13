@@ -33,9 +33,10 @@ export default function FinanceDashboard() {
   const formatCurrency = (val: number) => val ? `₹${Math.abs(val).toLocaleString('en-IN')}` : '₹0'
   const formatCurrencyL = (val: number) => {
     const abs = Math.abs(val)
-    if (abs >= 10000000) return `₹${(val/10000000).toFixed(1)}Cr`
-    if (abs >= 100000) return `₹${(val/100000).toFixed(1)}L`
-    if (abs >= 1000) return `₹${(val/1000).toFixed(1)}K`
+    if (abs >= 10000000) return `₹${(val/10000000).toFixed(2)}Cr`
+    if (abs >= 1000000) return `₹${(val/100000).toFixed(1)}L`
+    if (abs >= 100000) return `₹${Math.round(val).toLocaleString('en-IN')}`
+    if (abs >= 1000) return `₹${Math.round(val).toLocaleString('en-IN')}`
     return `₹${val.toLocaleString('en-IN')}`
   }
 
