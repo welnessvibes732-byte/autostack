@@ -97,6 +97,10 @@ export default function LeasesPage() {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    e.preventDefault()
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Lease Extraction' } }))
+    return
+
     const file = e.target.files?.[0]
     if (!file) return
 

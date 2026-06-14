@@ -37,6 +37,8 @@ BEGIN
      OR OLD.source_type IS DISTINCT FROM NEW.source_type
      OR OLD.source_id IS DISTINCT FROM NEW.source_id
      OR OLD.entry_number IS DISTINCT FROM NEW.entry_number
+     OR OLD.property_id IS DISTINCT FROM NEW.property_id
+     OR OLD.unit_id IS DISTINCT FROM NEW.unit_id
   THEN
     RAISE EXCEPTION 'SECURITY VIOLATION: Journal entries are immutable. Only reversal status can be updated.';
   END IF;
@@ -104,16 +106,12 @@ BEGIN
   FROM ledger_lines
   WHERE journal_entry_id = NEW.journal_entry_id;
 
-  -- Only enforce if there are at least 2 lines (a complete entry)
-  -- Single-line entries are intermediate states during trigger execution
-  IF v_line_count >= 2 THEN
-    IF ABS(v_total_debit - v_total_credit) > 0.01 THEN
-      RAISE EXCEPTION 'BALANCE VIOLATION: Journal entry % has unbalanced lines. Debit: %, Credit: %. Difference: %',
-        NEW.journal_entry_id,
-        v_total_debit,
-        v_total_credit,
-        ABS(v_total_debit - v_total_credit);
-    END IF;
+  IF ABS(v_total_debit - v_total_credit) > 0.01 THEN
+    RAISE EXCEPTION 'BALANCE VIOLATION: Journal entry % has unbalanced lines. Debit: %, Credit: %. Difference: %',
+      NEW.journal_entry_id,
+      v_total_debit,
+      v_total_credit,
+      ABS(v_total_debit - v_total_credit);
   END IF;
 
   RETURN NEW;
@@ -521,7 +519,7 @@ ALTER TABLE accounts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "journal_entries_org_isolation" ON journal_entries
   FOR ALL USING (
     organization_id IN (
-      SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+      SELECT organization_id FROM team_members WHERE user_id = auth.uid()
     )
   );
 
@@ -529,7 +527,7 @@ CREATE POLICY IF NOT EXISTS "ledger_lines_org_isolation" ON ledger_lines
   FOR ALL USING (
     journal_entry_id IN (
       SELECT id FROM journal_entries WHERE organization_id IN (
-        SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+        SELECT organization_id FROM team_members WHERE user_id = auth.uid()
       )
     )
   );
@@ -537,34 +535,34 @@ CREATE POLICY IF NOT EXISTS "ledger_lines_org_isolation" ON ledger_lines
 CREATE POLICY IF NOT EXISTS "security_deposits_org_isolation" ON security_deposits
   FOR ALL USING (
     organization_id IN (
-      SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+      SELECT organization_id FROM team_members WHERE user_id = auth.uid()
     )
   );
 
 CREATE POLICY IF NOT EXISTS "tenant_charges_org_isolation" ON tenant_charges
   FOR ALL USING (
     organization_id IN (
-      SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+      SELECT organization_id FROM team_members WHERE user_id = auth.uid()
     )
   );
 
 CREATE POLICY IF NOT EXISTS "finance_audit_org_isolation" ON finance_audit_log
   FOR SELECT USING (
     organization_id IN (
-      SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+      SELECT organization_id FROM team_members WHERE user_id = auth.uid()
     )
   );
 
 CREATE POLICY IF NOT EXISTS "fiscal_periods_org_isolation" ON fiscal_periods
   FOR ALL USING (
     organization_id IN (
-      SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+      SELECT organization_id FROM team_members WHERE user_id = auth.uid()
     )
   );
 
 CREATE POLICY IF NOT EXISTS "accounts_org_isolation" ON accounts
   FOR ALL USING (
     organization_id IN (
-      SELECT organization_id FROM profiles WHERE user_id = auth.uid()
+      SELECT organization_id FROM team_members WHERE user_id = auth.uid()
     )
   );

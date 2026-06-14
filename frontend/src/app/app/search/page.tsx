@@ -43,6 +43,9 @@ export default function AISearch() {
 
   const handleSearch = async (q = query) => {
     if (!q.trim() || isSearching) return
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'AI Portfolio Search' } }))
+    return
+    
     setQuery(q)
     setIsSearching(true)
     setDropOpen(false)

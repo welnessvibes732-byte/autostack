@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS security_deposits (
   refund_ref        TEXT,
   notes             TEXT,
   created_at        TIMESTAMPTZ DEFAULT now(),
-  updated_at        TIMESTAMPTZ DEFAULT now()
+  updated_at        TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT check_deposit_refund_math CHECK (COALESCE(refund_amount, 0) + COALESCE(deduction_amount, 0) <= deposit_amount)
 );
 
 CREATE INDEX idx_deposits_org ON security_deposits(organization_id);
@@ -643,16 +644,23 @@ DECLARE
   v_lines JSONB := '[]'::JSONB;
   v_tenant TEXT;
 BEGIN
-  IF NEW.status = 'paid' AND (OLD.status IS DISTINCT FROM 'paid') THEN
+  IF (NEW.status = 'paid' OR NEW.status = 'deducted_from_deposit') AND (OLD.status IS DISTINCT FROM 'paid' AND OLD.status IS DISTINCT FROM 'deducted_from_deposit') THEN
     
     PERFORM seed_chart_of_accounts(NEW.organization_id);
     SELECT full_name INTO v_tenant FROM tenants WHERE id = NEW.tenant_id;
 
-    -- Debit Cash (money came in)
-    v_lines := v_lines || jsonb_build_object(
-      'account_code', '1000', 'debit', NEW.amount, 'credit', 0,
-      'description', 'Charge paid by ' || COALESCE(v_tenant, 'tenant')
-    );
+    -- Debit Cash (money came in) OR Deposits Owed (if deducted from deposit)
+    IF NEW.status = 'deducted_from_deposit' THEN
+      v_lines := v_lines || jsonb_build_object(
+        'account_code', '2100', 'debit', NEW.amount, 'credit', 0,
+        'description', 'Charge deducted from deposit for ' || COALESCE(v_tenant, 'tenant')
+      );
+    ELSE
+      v_lines := v_lines || jsonb_build_object(
+        'account_code', '1000', 'debit', NEW.amount, 'credit', 0,
+        'description', 'Charge paid by ' || COALESCE(v_tenant, 'tenant')
+      );
+    END IF;
     -- Credit Maintenance Recovery (damage/charge income)
     v_lines := v_lines || jsonb_build_object(
       'account_code', '4200', 'debit', 0, 'credit', NEW.amount,

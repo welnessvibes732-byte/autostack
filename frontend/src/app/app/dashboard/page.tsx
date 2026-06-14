@@ -269,8 +269,8 @@ export default function Dashboard() {
           </div>
           <div className="dash-hero-text flex gap-3 flex-wrap">
             <button onClick={() => router.push('/app/properties')} className="px-4 py-2 bg-white text-black font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/90 transition-colors"><Plus size={16}/> Add Property</button>
-            <button onClick={() => router.push('/app/leases')} className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/20 transition-colors"><Upload size={16}/> Upload Lease</button>
-            <button onClick={() => router.push('/app/search')} className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/20 transition-colors"><Sparkles size={16}/> Ask AI</button>
+            <button onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Lease Extraction' } })) }} className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/20 transition-colors"><Upload size={16}/> Upload Lease</button>
+            <button onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'AI Portfolio Search' } })) }} className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-full flex items-center gap-2 hover:bg-white/20 transition-colors"><Sparkles size={16}/> Ask AI</button>
           </div>
         </div>
       </div>

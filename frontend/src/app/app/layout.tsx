@@ -13,6 +13,7 @@ import {
 } from "lucide-react"
 
 import { getOrCreateOrg } from "@/lib/getOrCreateOrg"
+import PaywallModal from "@/components/PaywallModal"
 
 gsap.registerPlugin(useGSAP)
 
@@ -306,6 +307,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           {children}
         </div>
       </main>
+      <PaywallModal />
     </div>
   )
 }

@@ -55,30 +55,12 @@ export default function Alerts() {
 
   const triggerTestAlert = async () => {
     try {
-      const orgId = await getOrCreateOrg()
-      const severities = ["urgent", "warning", "info", "ok"]
-      const randomSev = severities[Math.floor(Math.random() * severities.length)]
-      
-      const messages: Record<string, string[]> = {
-        urgent: ["Water main leak detected in Unit 4B", "Server connection lost to IoT gateway", "Fire alarm triggered in North Wing"],
-        warning: ["HVAC unit 2 requires scheduled maintenance", "Tenant 12C rent is 5 days overdue", "Occupancy dropped below 90% target"],
-        info: ["Monthly compliance report generated successfully", "System backup completed", "New vendor added to preferred list"],
-        ok: ["All IoT sensors reporting normal status", "Rent collection hit 100% for this month", "Maintenance queue is completely clear"]
-      }
-      
-      const randomMsg = messages[randomSev][Math.floor(Math.random() * 3)]
-      
-      await supabase.from("alerts").insert({
-        organization_id: orgId,
-        alert_type: "system_test",
-        message: randomMsg,
-        severity: randomSev,
-        is_read: false
-      })
+      const res = await fetch("/api/alerts/test", { method: "POST" })
+      if (!res.ok) throw new Error("Failed to trigger alert")
       
       fetchAlerts() // Refresh list
     } catch (e) {
-      console.error("Failed to insert test alert", e)
+      console.error("Failed to trigger test alert", e)
     }
   }
 
@@ -108,9 +90,8 @@ export default function Alerts() {
           >
             <Zap size={14} /> Test Alert
           </button>
-          <button onClick={() => alert("Alert configuration settings coming soon!")} className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans', sans-serif", transition: "all 0.2s" }}
-            onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
-            onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0,  duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
+          <button disabled className="anim-filter" style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-3)", fontSize: "13px", fontWeight: 500, cursor: "not-allowed", fontFamily: "'DM Sans', sans-serif", opacity: 0.5 }}
+            title="Configuration coming soon"
           >
             <Settings size={14} /> Configure
           </button>

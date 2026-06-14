@@ -74,6 +74,9 @@ export default function Documents() {
   }
 
   const handleFileUpload = async (file: File) => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document AI Analysis' } }))
+    return
+    
     if (!file) return
     setUploadStatus('uploading')
 
