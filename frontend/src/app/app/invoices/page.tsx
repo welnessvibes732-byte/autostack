@@ -56,9 +56,9 @@ export default function InvoicesPage() {
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     e.preventDefault()
     window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Invoice Processing' } }))
-    return
+    return;
 
-    const file = e.target.files?.[0]
+    const file = e.target.files?.[0] as File;
     if (!file) return
 
     setIsUploading(true)
@@ -80,7 +80,7 @@ export default function InvoicesPage() {
 
       // Trigger Webhook if configured for document processing
       if (process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK) {
-        fetch(process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK, {
+        fetch(process.env.NEXT_PUBLIC_N8N_DOCUMENT_WEBHOOK as string, {
           method: 'POST', headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ event: 'document_uploaded', file_path: filePath, organization_id: orgId, file_name: file.name, type: 'invoice', invoice_id: inserted.id })
         }).catch(console.error)

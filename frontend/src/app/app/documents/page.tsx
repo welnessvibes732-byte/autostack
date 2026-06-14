@@ -75,9 +75,10 @@ export default function Documents() {
 
   const handleFileUpload = async (file: File) => {
     window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document AI Analysis' } }))
-    return
-    
+
     if (!file) return
+    return;
+
     setUploadStatus('uploading')
 
     try {
@@ -86,7 +87,7 @@ export default function Documents() {
       // Upload to bucket
       const filePath = `${organization_id}/${Date.now()}_${file.name}`
       const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file)
-      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message)
+      if (uploadErr) throw new Error("Storage Upload Error: " + (uploadErr?.message || "Unknown error"))
 
       setUploadStatus('processing')
 
@@ -100,7 +101,7 @@ export default function Documents() {
         authority_level: 4,
         index_status: 'pending'
       })
-      if (dbErr) throw new Error("Database Insert Error: " + dbErr.message)
+      if (dbErr) throw new Error("Database Insert Error: " + (dbErr?.message || "Unknown error"))
 
       // Call n8n webhook
       const webhookRes = await fetch('http://localhost:5678/webhook-test/02169021-3bd5-4731-9232-18ee8906ce05', {
