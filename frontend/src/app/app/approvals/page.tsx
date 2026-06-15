@@ -163,7 +163,7 @@ export default function ApprovalsPage() {
 
   // --- Invoice Actions ---
   const handleApproveInvoice = async (invoiceId: string) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Invoice Approval Workflow' } })); return;
+
     setProcessingId(invoiceId)
     try {
       const { error } = await supabase.from('invoices').update({ status: 'approved', approved_by: currentUser?.id, approved_at: new Date().toISOString() }).eq('id', invoiceId)
@@ -181,7 +181,7 @@ export default function ApprovalsPage() {
   }
 
   const handleRejectInvoice = async (invoiceId: string) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Invoice Approval Workflow' } })); return;
+
     if (!rejectionReason.trim()) return toast.error("Please enter a rejection reason")
     setProcessingId(invoiceId)
     try {
@@ -203,7 +203,7 @@ export default function ApprovalsPage() {
 
   // --- Lease Actions ---
   const handleSendRenewal = async (lease: any) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Lease Renewal Automation' } })); return;
+
     setProcessingId(lease.id)
     try {
       const { error } = await supabase.from('leases').update({ renewal_status: 'offered' }).eq('id', lease.id)
@@ -221,7 +221,7 @@ export default function ApprovalsPage() {
   }
   
   const handleMarkRenewed = async (leaseId: string) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Lease Renewal Automation' } })); return;
+
     if (!confirm("Confirm lease has been renewed?")) return
     setProcessingId(leaseId)
     try {
@@ -255,7 +255,7 @@ export default function ApprovalsPage() {
 
   // --- Maintenance Actions ---
   const handleApproveQuote = async (ticket: any) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Maintenance Approval Workflow' } })); return;
+
     setProcessingId(ticket.id)
     try {
       const { error } = await supabase.from('maintenance_tickets').update({ status: 'in_progress', assigned_at: new Date().toISOString() }).eq('id', ticket.id)
@@ -294,7 +294,7 @@ export default function ApprovalsPage() {
 
   // --- Deal Actions ---
   const handleRequestSignoff = async (lead: any) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Deal Sign-Off Automation' } })); return;
+
     setProcessingId(lead.id)
     try {
       const { error } = await supabase.from('leads').update({ stage: 'pending_signoff' }).eq('id', lead.id)
@@ -312,7 +312,7 @@ export default function ApprovalsPage() {
   }
 
   const handleApproveDeal = async (leadId: string) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Deal Approval Workflow' } })); return;
+
     if (!confirm("Confirm deal approval?")) return
     setProcessingId(leadId)
     try {

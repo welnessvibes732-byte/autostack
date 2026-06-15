@@ -74,7 +74,6 @@ export default function Documents() {
   }
 
   const handleFileUpload = async (file: File) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document AI Analysis' } }))
 
     if (!file) return
     return;
@@ -167,7 +166,7 @@ export default function Documents() {
           </h1>
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>All files are vectorised and indexed for AI Search.</p>
         </div>
-        <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+        <label onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document AI Analysis' } })) }} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 20px", borderRadius: "10px", background: "linear-gradient(to right, #ec4899, #f97316)", border: "none", color: "#fff", fontSize: "13px", fontWeight: 600, cursor: "pointer", boxShadow: "0 4px 16px rgba(255,86,86,0.25)", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
           onMouseEnter={e => gsap.to(e.currentTarget, { scale: 1.04, y: -2, duration: 0.2 })}
           onMouseLeave={e => gsap.to(e.currentTarget, { scale: 1, y: 0, duration: 0.3, ease: "back.out(1.5)" })}
         >
@@ -177,7 +176,7 @@ export default function Documents() {
       </header>
 
       {/* Drop zone */}
-      <label className="upload-zone" style={{ borderRadius: "16px", border: "2px dashed rgba(59,130,246,0.25)", background: "rgba(59,130,246,0.03)", padding: "36px", textAlign: "center", cursor: "pointer", transition: "all 0.25s", position: "relative", overflow: "hidden", display: "block" }}
+      <label onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document AI Analysis' } })) }} className="upload-zone" style={{ borderRadius: "16px", border: "2px dashed rgba(59,130,246,0.25)", background: "rgba(59,130,246,0.03)", padding: "36px", textAlign: "center", cursor: "pointer", transition: "all 0.25s", position: "relative", overflow: "hidden", display: "block" }}
         onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.5)"; e.currentTarget.style.background = "rgba(59,130,246,0.06)"; gsap.to(".upload-icon", { y: -6, duration: 0.3, ease: "power2.out" }) }}
         onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(59,130,246,0.25)"; e.currentTarget.style.background = "rgba(59,130,246,0.03)"; gsap.to(".upload-icon", { y: 0, duration: 0.4, ease: "back.out(1.5)" }) }}
       >

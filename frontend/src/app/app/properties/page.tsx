@@ -91,7 +91,7 @@ export default function Properties() {
   }, [])
 
   const submitProperty = async () => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Property Management' } })); return;
+
     if (!form.name || !form.address_line1 || !form.city) {
       alert("Please fill in the Property Name, Address, and City.");
       return;
@@ -213,7 +213,7 @@ export default function Properties() {
           <p style={{ color: "var(--text-2)", marginTop: "4px", fontSize: "14px" }}>Your real estate portfolio master list.</p>
         </div>
         <div style={{ display: "flex", gap: "10px" }}>
-          <label style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
+          <label onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document Upload & AI Processing' } })) }} style={{ display: "flex", alignItems: "center", gap: "8px", padding: "9px 16px", borderRadius: "10px", background: "#0D0D0D", border: "1px solid var(--border-2)", color: "var(--text-2)", fontSize: "13px", fontWeight: 500, cursor: "pointer", fontFamily: "'DM Sans',sans-serif", transition: "all 0.2s" }}
             onMouseEnter={e => { gsap.to(e.currentTarget, { y: -2, duration: 0.2 }); e.currentTarget.style.color = "#fff" }}
             onMouseLeave={e => { gsap.to(e.currentTarget, { y: 0, duration: 0.3, ease: "back.out(1.5)" }); e.currentTarget.style.color = "var(--text-2)" }}
           >

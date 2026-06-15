@@ -54,9 +54,6 @@ export default function InvoicesPage() {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault()
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Invoice Processing' } }))
-    return;
 
     const file = e.target.files?.[0] as File;
     if (!file) return
@@ -288,7 +285,7 @@ export default function InvoicesPage() {
           <p className="text-[#A1A1AA]">Approve vendor invoices and record payments to the ledger</p>
         </div>
         
-        <label className="px-5 py-2.5 text-white font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 cursor-pointer transition-opacity" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", border: "none" }}>
+        <label onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Invoice Processing' } })) }} className="px-5 py-2.5 text-white font-bold text-sm rounded-lg flex items-center gap-2 hover:opacity-90 cursor-pointer transition-opacity" style={{ background: "linear-gradient(to right, #ec4899, #f97316)", border: "none" }}>
           {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>}
           {isUploading ? "Uploading..." : "Upload Invoice"}
           <input type="file" accept=".pdf,.jpg,.jpeg,.png" className="hidden" onChange={handleFileUpload} disabled={isUploading} />

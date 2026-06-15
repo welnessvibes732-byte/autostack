@@ -97,9 +97,7 @@ export default function LeasesPage() {
   }
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    e.preventDefault()
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Lease Extraction' } }))
-    return;
+
 
     const file = e.target.files?.[0] as File;
     if (!file) return
@@ -366,7 +364,7 @@ export default function LeasesPage() {
         </div>
         
         <div className="flex gap-3">
-          <label className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:bg-white/20 cursor-pointer transition-colors">
+          <label onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Automated Lease Extraction' } })) }} className="px-4 py-2 bg-[#1E1E1E] text-white font-medium text-sm rounded-lg flex items-center gap-2 hover:bg-white/20 cursor-pointer transition-colors">
             {isUploading ? <Loader2 size={16} className="animate-spin"/> : <Upload size={16}/>}
             {isUploading ? "Uploading..." : "Upload Lease PDF"}
             <input type="file" accept=".pdf" className="hidden" onChange={handleFileUpload} disabled={isUploading} />

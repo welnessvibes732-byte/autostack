@@ -162,7 +162,7 @@ export default function Tenants() {
   })
 
   const submitTenant = async () => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Tenant Management' } })); return;
+
     if (!form.full_name || !form.phone) {
       alert("Please enter at least the Full Name and Phone Number.");
       return;
@@ -207,7 +207,7 @@ export default function Tenants() {
 
   // ─── Delete Tenant ───
   const deleteTenant = async (tenantId: string, tenantName: string) => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Tenant Management' } })); return;
+
     if (!confirm(`Are you sure you want to delete "${tenantName}"? This action cannot be undone.`)) return;
 
     try {

@@ -54,7 +54,7 @@ export default function Alerts() {
   }
 
   const triggerTestAlert = async () => {
-    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Alert Automation' } })); return;
+
     try {
       const res = await fetch("/api/alerts/test", { method: "POST" })
       if (!res.ok) throw new Error("Failed to trigger alert")
