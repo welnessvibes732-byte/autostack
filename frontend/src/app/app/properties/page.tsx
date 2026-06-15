@@ -91,6 +91,7 @@ export default function Properties() {
   }, [])
 
   const submitProperty = async () => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Property Management' } })); return;
     if (!form.name || !form.address_line1 || !form.city) {
       alert("Please fill in the Property Name, Address, and City.");
       return;
@@ -125,14 +126,14 @@ export default function Properties() {
       const { data: inserted, error: propErr } = await supabase.from('properties').insert(insertPayload).select('id');
 
       if (propErr) throw propErr;
-      if (!inserted || inserted.length === 0) throw new Error("Property creation failed (no data returned)");
+      if (!inserted || inserted!.length === 0) throw new Error("Property creation failed (no data returned)");
 
       // 2. Generate Units
       const unitsToInsert = [];
       for (let i = 1; i <= unitsNum; i++) {
         unitsToInsert.push({
           organization_id,
-          property_id: inserted[0].id,
+          property_id: inserted![0].id,
           unit_number: `Unit ${i}`,
           status: 'vacant',
           rent_amount: 0
@@ -140,7 +141,7 @@ export default function Properties() {
       }
 
       const { error: unitsErr } = await supabase.from('units').insert(unitsToInsert);
-      if (unitsErr) throw new Error("Property created, but failed to generate units: " + unitsErr.message);
+      if (unitsErr) throw new Error("Property created, but failed to generate units: " + unitsErr!.message);
 
       setShowCreateModal(false);
       window.location.reload();
@@ -151,6 +152,7 @@ export default function Properties() {
   }
 
   const handleFileUpload = async (file: File) => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Document Upload & AI Processing' } })); return;
     if (!file) return;
     setUploadStatus('uploading');
 
@@ -159,7 +161,7 @@ export default function Properties() {
       const filePath = `${organization_id}/${Date.now()}_${file.name}`;
       
       const { error: uploadErr } = await supabase.storage.from('documents').upload(filePath, file);
-      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr.message);
+      if (uploadErr) throw new Error("Storage Upload Error: " + uploadErr!.message);
 
       setUploadStatus('processing');
 
@@ -172,7 +174,7 @@ export default function Properties() {
         authority_level: 4,
         index_status: 'pending'
       });
-      if (dbErr) throw new Error("Database Insert Error: " + dbErr.message);
+      if (dbErr) throw new Error("Database Insert Error: " + dbErr!.message);
 
       try {
         await fetch('http://localhost:5678/webhook-test/d093c250-b1dc-4575-a910-4f87312fb238', {

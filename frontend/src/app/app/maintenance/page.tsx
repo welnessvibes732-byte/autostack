@@ -66,6 +66,7 @@ export default function MaintenancePage() {
   }
 
   const handleApproveQuote = async (ticket: any) => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Maintenance Approval Workflow' } })); return;
     setProcessingId(ticket.id)
     try {
       const { error } = await supabase
@@ -91,6 +92,7 @@ export default function MaintenancePage() {
   }
 
   const handleMarkCompleted = async (ticket: any) => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Maintenance Completion & Auto-Invoicing' } })); return;
     setProcessingId(ticket.id)
     const toastId = toast.loading("Marking completed & generating invoice...")
     try {
@@ -125,6 +127,7 @@ export default function MaintenancePage() {
   }
 
   const handleCreateRequest = async () => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Maintenance Automation' } })); return;
     if (!newReq.title) return toast.error("Title required")
     if (!newReq.lease_id) return toast.error("Please select a tenant/unit")
     
@@ -167,7 +170,7 @@ export default function MaintenancePage() {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            Authorization: `Bearer ${session.access_token}`
+            Authorization: `Bearer ${session!.access_token}`
           },
           body: JSON.stringify({ ticket_id: newTicket.id })
         }).catch(console.error)

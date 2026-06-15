@@ -41,7 +41,7 @@ export const countryCodes = [
   },
   {
     "name": "Antarctica",
-    "code": "undefined",
+    "code": "+672",
     "flag": "🇦🇶"
   },
   {
@@ -196,7 +196,7 @@ export const countryCodes = [
   },
   {
     "name": "Canada",
-    "code": "+1204",
+    "code": "+1",
     "flag": "🇨🇦"
   },
   {
@@ -486,7 +486,7 @@ export const countryCodes = [
   },
   {
     "name": "Heard Island and McDonald Islands",
-    "code": "undefined",
+    "code": "+672",
     "flag": "🇭🇲"
   },
   {

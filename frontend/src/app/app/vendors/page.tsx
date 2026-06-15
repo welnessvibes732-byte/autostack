@@ -58,6 +58,7 @@ export default function VendorsPage() {
   }
 
   const handleCreateVendor = async () => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Vendor Management' } })); return;
     if (!newVendor.name || !newVendor.phone || !newVendor.email) {
       return toast.error("Name, Phone, and Email are required")
     }
@@ -97,6 +98,7 @@ export default function VendorsPage() {
   }
 
   const toggleStatus = async (vendorId: string, field: 'is_preferred' | 'is_blacklisted', currentValue: boolean) => {
+    window.dispatchEvent(new CustomEvent('showPaywall', { detail: { source: 'Vendor Management' } })); return;
     try {
       // If blacklisting, remove preferred. If preferring, remove blacklisted.
       const updates: any = { [field]: !currentValue }
