@@ -77,6 +77,32 @@ export default function Login() {
     setLoading(false)
   }
 
+  const handleGuestLogin = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    setLoading(true); setError(null)
+    gsap.to(".guest-btn", { scale: 0.96, duration: 0.1, yoyo: true, repeat: 1 })
+
+    const demoEmail = "demo@propiq.app"
+    const demoPass = "Demo1234!"
+
+    let { error: authErr } = await supabase.auth.signInWithPassword({ email: demoEmail, password: demoPass })
+
+    if (authErr) {
+      const { error: signUpErr } = await supabase.auth.signUp({ email: demoEmail, password: demoPass })
+      if (signUpErr) {
+        setError("Guest login failed: " + signUpErr.message)
+        setLoading(false)
+        return
+      }
+    }
+
+    setSuccess(true)
+    gsap.to(cardRef.current, {
+      scale: 0.97, opacity: 0, y: -20, duration: 0.4, ease: "power2.in",
+      onComplete: () => router.push("/app/dashboard"),
+    })
+  }
+
   const inputBase: React.CSSProperties = {
     display: "block", width: "100%", height: "46px",
     borderRadius: "9999px",
@@ -299,6 +325,31 @@ export default function Login() {
               {loading ? (
                 <><div style={{ width: "16px", height: "16px", border: "2px solid rgba(0,0,0,0.2)", borderTopColor: "#000", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />signing in…</>
               ) : success ? "redirecting…" : "sign in →"}
+            </button>
+            
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", margin: "8px 0" }}>
+              <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
+              <span style={{ fontSize: "12px", color: "#A1A1AA" }}>or</span>
+              <div style={{ flex: 1, height: "1px", background: "rgba(255,255,255,0.1)" }} />
+            </div>
+
+            <button type="button" className="guest-btn" onClick={handleGuestLogin}
+              disabled={loading || success}
+              style={{
+                width: "100%", height: "48px", borderRadius: "9999px",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)", color: "#fff",
+                fontSize: "14px", fontWeight: 400,
+                fontFamily: "'Readex Pro', system-ui, sans-serif",
+                cursor: loading ? "not-allowed" : "pointer",
+                letterSpacing: "-0.02em",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+                transition: "background 0.2s, border-color 0.2s",
+              }}
+              onMouseEnter={e => { if (!loading) { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.1)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.2)" } }}
+              onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.05)"; (e.currentTarget as HTMLElement).style.borderColor = "rgba(255,255,255,0.1)" }}
+            >
+              guest login (ai bypass)
             </button>
           </form>
 
